@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\冯杰\\.ohos\\config\\default_qingguoapp_R_wPwnkbT8n0pXZSrZQzRBJG6S4ra3x4adypKW3sPWY=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BD1BF4B0B99DCB49673DEF5D3EDBED41A3615AC4F4186A7EDB47A115F25E3650A43749BC63673B3",
+          "profile": "C:\\Users\\冯杰\\.ohos\\config\\default_qingguoapp_R_wPwnkbT8n0pXZSrZQzRBJG6S4ra3x4adypKW3sPWY=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\冯杰\\.ohos\\config\\default_qingguoapp_R_wPwnkbT8n0pXZSrZQzRBJG6S4ra3x4adypKW3sPWY=.p12",
+          "storePassword": "0000001BE782BD7F29BD879F10F543D64EDDBB5FE80529F57A8C298A5FE905DFAEB53E748832FFFF1B419A"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "26.0.0",
+        "compatibleSdkVersion": "6.1.1(24)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

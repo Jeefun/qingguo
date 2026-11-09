@@ -1,0 +1,39 @@
+{
+  "color": [
+    { "name": "start_window_background", "value": "#F4F8F2" },
+
+    { "name": "bg", "value": "#F4F8F2" },
+    { "name": "surface", "value": "#FFFFFF" },
+    { "name": "surfaceHigh", "value": "#EDF3E8" },
+    { "name": "border", "value": "#E2EADD" },
+    { "name": "divider", "value": "#EBF1E6" },
+
+    { "name": "text", "value": "#17211A" },
+    { "name": "textDim", "value": "#5F6E64" },
+    { "name": "textFaint", "value": "#9AA89D" },
+
+    { "name": "accent", "value": "#12A450" },
+    { "name": "accentOn", "value": "#FFFFFF" },
+    { "name": "accentSoft", "value": "#E5F6EA" },
+    { "name": "accentDim", "value": "#C9EEDA" },
+    { "name": "brandStart", "value": "#10B981" },
+    { "name": "brandEnd", "value": "#84CC16" },
+
+    { "name": "chipBg", "value": "#EDF3E8" },
+    { "name": "chipOn", "value": "#12A450" },
+    { "name": "glass", "value": "#B3FFFFFF" },
+    { "name": "gold", "value": "#E8A23C" },
+    { "name": "rankOne", "value": "#E85D3C" },
+    { "name": "rankTwo", "value": "#E8A23C" },
+    { "name": "rankThree", "value": "#3C9BE8" },
+
+    { "name": "mask", "value": "#66000000" },
+    { "name": "detailScrim", "value": "#B3F4F8F2" },
+    { "name": "scrimTop", "value": "#B3000000" },
+    { "name": "scrimBottom", "value": "#00000000" },
+    { "name": "playerBg", "value": "#0B0F0D" },
+    { "name": "playerText", "value": "#F2F6F0" },
+    { "name": "playerDim", "value": "#9DB0A3" },
+    { "name": "trackOff", "value": "#33FFFFFF" }
+  ]
+}

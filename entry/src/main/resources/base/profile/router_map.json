@@ -1,0 +1,29 @@
+﻿{
+  "routerMap": [
+    {
+      "name": "search",
+      "buildFunction": "QgSearchBuilder",
+      "pageSourceFile": "src/main/ets/pages/SearchPage.ets"
+    },
+    {
+      "name": "detail",
+      "buildFunction": "QgDetailBuilder",
+      "pageSourceFile": "src/main/ets/pages/DetailPage.ets"
+    },
+    {
+      "name": "player",
+      "buildFunction": "QgPlayerBuilder",
+      "pageSourceFile": "src/main/ets/pages/PlayerPage.ets"
+    },
+    {
+      "name": "history",
+      "buildFunction": "QgHistoryBuilder",
+      "pageSourceFile": "src/main/ets/pages/HistoryPage.ets"
+    },
+    {
+      "name": "settings",
+      "buildFunction": "QgSettingsBuilder",
+      "pageSourceFile": "src/main/ets/pages/SettingsPage.ets"
+    }
+  ]
+}
