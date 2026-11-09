@@ -342,4 +342,11 @@ export class SoraniSource extends QgSource {
   async play(dramaId: string, episodeId: string): Promise<QgPlayInfo> {
     throw new Error('青空次元播放需要网页滑块验证码登录，当前版本暂不支持在线播放；可正常浏览与搜索');
   }
+
+  coverHeaders(url: string): Record<string, string> {
+    return {
+      'User-Agent': UA,
+      'Referer': `${SITE}/`
+    };
+  }
 }

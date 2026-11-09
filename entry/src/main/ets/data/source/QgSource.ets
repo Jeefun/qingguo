@@ -34,6 +34,11 @@ export abstract class QgSource {
 
   /** 解析某分集的可播放地址 */
   abstract play(dramaId: string, episodeId: string): Promise<QgPlayInfo>;
+
+  /** 封面/图片加载需要注入的请求头（Referer/UA），默认无 */
+  coverHeaders(url: string): Record<string, string> {
+    return {};
+  }
 }
 
 /** 源注册中心 */

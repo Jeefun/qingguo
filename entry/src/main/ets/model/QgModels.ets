@@ -8,7 +8,7 @@
 export class QgDrama {
   /** 全局唯一 ID：sourceId + ':' + 站点内 ID */
   id: string = '';
-  /** 所属站源 ID（hongguo / hanxiaoquan / sorani / huangdou / demo） */
+  /** 所属站源 ID（hongguo / hanxiaoquan / sorani / huangdou / …，见 QG_SOURCES） */
   sourceId: string = '';
   title: string = '';
   genre: string = '';
@@ -93,6 +93,16 @@ export class QgPlayInfo {
   headers: Record<string, string> = {};
   /** 时长（毫秒，0 未知） */
   durationMs: number = 0;
+  /** 弹幕标识（红果评论组 id，空表示无弹幕） */
+  danmakuId: string = '';
+  /** 候选播放地址（多线路，第 1 个为默认线路） */
+  routes: string[] = [];
+  /** 当前使用的线路下标（routes 中的索引） */
+  routeIndex: number = 0;
+  /** 可选清晰度列表（如 480/720/1080，空表示无多清晰度） */
+  qualities: number[] = [];
+  /** 当前清晰度（0 未知） */
+  quality: number = 0;
 }
 
 /** 观看记录 */
@@ -144,6 +154,10 @@ export class QgAppSettings {
   danmakuOpacity: number = 80;
   /** 弹幕：字号缩放 50-150 */
   danmakuFontSize: number = 100;
+  /** 弹幕：显示区域（屏幕高度百分比 25/50/75/100） */
+  danmakuArea: number = 75;
+  /** 弹幕：屏蔽词列表 */
+  danmakuBlockWords: string[] = [];
   /** 下载：仅 Wi-Fi 下载 */
   downloadWifiOnly: boolean = true;
   /** 下载：同时下载任务数 */
@@ -170,4 +184,99 @@ export interface QgPlayerParam {
 /** 搜索页路由参数（可带初始关键词） */
 export interface QgSearchParam {
   keyword: string;
+}
+
+/** 站源描述（设置页 / 源切换展示用） */
+export class QgSourceDesc {
+  id: string = '';
+  /** 展示名（红果 / 韩小圈 …） */
+  name: string = '';
+  /** 介绍文案 */
+  desc: string = '';
+  /** 所属分组 id（黄果三源归组 huangguo，其余与 id 相同） */
+  groupId: string = '';
+  /** 分组展示名 */
+  groupName: string = '';
+  /** 组内入口名（黄果组：视频/AI/旧版；其余与 name 相同） */
+  entryName: string = '';
+
+  constructor(id: string, name: string, desc: string) {
+    this.id = id;
+    this.name = name;
+    this.desc = desc;
+    this.groupId = id;
+    this.groupName = name;
+    this.entryName = name;
+  }
+}
+
+/** 站源分组信息 */
+export class QgSourceGroupInfo {
+  id: string = '';
+  name: string = '';
+  memberIds: string[] = [];
+
+  constructor(id: string, name: string, memberIds: string[]) {
+    this.id = id;
+    this.name = name;
+    this.memberIds = memberIds;
+  }
+}
+
+/** 全部 15 个站源（对照真果鉴 models.dart SourceSite） */
+export const QG_SOURCES: QgSourceDesc[] = [
+  qgSrc('hongguo', '红果', '短剧 · 漫剧 · AI 剧'),
+  qgSrc('hanxiaoquan', '韩小圈', '韩剧 · 韩国电影 · 综艺动漫'),
+  qgSrc('guipian', '鬼片', '鬼片 · 电视剧 · 动漫'),
+  qgSrc('sorani', '青空', '番剧 · 剧场动画 · 特摄'),
+  qgSrc('huangdou', '黄豆', '精选短剧'),
+  qgSrc('huangju', '剧果', '热门 · 最新 · 分类短剧'),
+  qgSrc('yeguo', '野果', '分类短剧 · 在线搜索'),
+  qgSrc('dsd', '帝果', '分类视频 · 在线搜索'),
+  qgSrc('jinguoduanju', '禁果短剧', '推荐 · 分类短剧 · 在线搜索'),
+  qgSrc('jinguo', '禁果', '精选 · 最新 · 分类短剧 · 在线搜索'),
+  qgSrc('heitao', '黑桃', '分类短剧 · 在线搜索'),
+  qgSrc('beabox', '笔盒', '分类视频 · 在线搜索'),
+  qgHuangguo('huangguo-video', '黄果视频', '视频剧集', '视频'),
+  qgHuangguo('huangguoai', '黄果 AI', 'AI 短剧', 'AI'),
+  qgHuangguo('cloudfront', '黄果旧版', '旧 API 剧库', '旧版')
+];
+
+function qgSrc(id: string, name: string, desc: string): QgSourceDesc {
+  return new QgSourceDesc(id, name, desc);
+}
+
+function qgHuangguo(id: string, name: string, desc: string, entryName: string): QgSourceDesc {
+  const d: QgSourceDesc = new QgSourceDesc(id, name, desc);
+  d.groupId = 'huangguo';
+  d.groupName = '黄果';
+  d.entryName = entryName;
+  return d;
+}
+
+/** 按源 id 查描述（找不到返回 undefined） */
+export function qgSourceDescOf(id: string): QgSourceDesc | undefined {
+  return QG_SOURCES.find((d: QgSourceDesc): boolean => d.id === id);
+}
+
+/** 是否为已知源 id */
+export function qgIsKnownSource(id: string): boolean {
+  return qgSourceDescOf(id) !== undefined;
+}
+
+/** 源分组列表（设置页展示顺序：黄果组三源排最后） */
+export function qgSourceGroups(): QgSourceGroupInfo[] {
+  const groups: QgSourceGroupInfo[] = [];
+  const seen: Map<string, QgSourceGroupInfo> = new Map<string, QgSourceGroupInfo>();
+  for (let i: number = 0; i < QG_SOURCES.length; i++) {
+    const d: QgSourceDesc = QG_SOURCES[i];
+    let g: QgSourceGroupInfo | undefined = seen.get(d.groupId);
+    if (g === undefined) {
+      g = new QgSourceGroupInfo(d.groupId, d.groupName, []);
+      seen.set(d.groupId, g);
+      groups.push(g);
+    }
+    g.memberIds.push(d.id);
+  }
+  return groups;
 }

@@ -4,7 +4,7 @@
  */
 import { QgPlayerParam, QgWatchRecord } from '../model/QgModels';
 import { QgStore } from '../data/QgStore';
-import { QgBackBtn, QgEmptyView, qgCoverOf } from '../components/QgWidgets';
+import { QgBackBtn, QgEmptyView, qgCoverOfDramaId } from '../components/QgWidgets';
 
 /** 相对时间文案 */
 function relativeTime(ts: number): string {
@@ -133,7 +133,7 @@ struct QgHistoryPage {
   @Builder
   RowBuilder(item: QgWatchRecord) {
     Row({ space: 12 }) {
-      Image(qgCoverOf(item.cover))
+      Image(qgCoverOfDramaId(item.cover, item.dramaId))
         .width(76)
         .height(100)
         .objectFit(ImageFit.Cover)

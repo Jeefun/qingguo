@@ -2,30 +2,27 @@
  * 青果APP 共享 UI 组件：剧集卡片 / 区块标题 / 空态视图 / 题材胶囊 / 返回按钮。
  */
 import { curves } from '@kit.ArkUI';
+import { QgRepository } from '../data/QgRepository';
+import { QgGateway } from '../data/QgGateway';
 
 /**
- * 封面统一出口：网络 URL 直接返回；
- * 演示源本地封面用 "res:cover_N" 约定，映射到打包资源。
+ * 封面统一出口：http(s) 封面经本地媒体网关注入 Referer/UA 后加载；
+ * "res:cover_N" 为旧演示源残留记录，统一回落占位图。
  */
-export function qgCoverOf(cover: string): ResourceStr {
+export function qgCoverOf(cover: string, sourceId: string): ResourceStr {
   if (cover.startsWith('res:')) {
-    switch (cover.substring(4)) {
-      case 'cover_1': return $r('app.media.cover_1');
-      case 'cover_2': return $r('app.media.cover_2');
-      case 'cover_3': return $r('app.media.cover_3');
-      case 'cover_4': return $r('app.media.cover_4');
-      case 'cover_5': return $r('app.media.cover_5');
-      case 'cover_6': return $r('app.media.cover_6');
-      case 'cover_7': return $r('app.media.cover_7');
-      case 'cover_8': return $r('app.media.cover_8');
-      case 'cover_9': return $r('app.media.cover_9');
-      case 'cover_10': return $r('app.media.cover_10');
-      case 'cover_11': return $r('app.media.cover_11');
-      case 'cover_12': return $r('app.media.cover_12');
-      default: return $r('app.media.cover_1');
-    }
+    return $r('app.media.cover_1');
+  }
+  if (cover.startsWith('http://') || cover.startsWith('https://')) {
+    return QgGateway.imageUrl(cover, QgRepository.coverHeadersOf(sourceId, cover));
   }
   return cover;
+}
+
+/** 按全局剧集 ID（"源ID:站内ID"）加载封面 */
+export function qgCoverOfDramaId(cover: string, dramaId: string): ResourceStr {
+  const idx: number = dramaId.indexOf(':');
+  return qgCoverOf(cover, idx >= 0 ? dramaId.substring(0, idx) : '');
 }
 
 @Component
@@ -35,13 +32,14 @@ export struct QgDramaCard {
   @Prop subText: string = '';
   @Prop badge: string = '';
   @Prop pressed: boolean = false;
+  @Prop sourceId: string = '';
   onTapCard: () => void = () => {
   };
 
   build() {
     Column() {
       Stack({ alignContent: Alignment.BottomStart }) {
-        Image(qgCoverOf(this.cover))
+        Image(qgCoverOf(this.cover, this.sourceId))
           .width('100%')
           .aspectRatio(0.75)
           .objectFit(ImageFit.Cover)

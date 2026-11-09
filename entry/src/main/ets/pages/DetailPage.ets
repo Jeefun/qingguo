@@ -121,7 +121,7 @@ struct QgDetailPage {
   ContentBuilder() {
     Stack() {
       // 背景毛玻璃封面 + 半透明遮罩
-      Image(qgCoverOf(this.getD().cover))
+      Image(qgCoverOf(this.getD().cover, this.getD().sourceId))
         .width('100%')
         .height('100%')
         .objectFit(ImageFit.Cover)
@@ -177,7 +177,7 @@ struct QgDetailPage {
   @Builder
   InfoCardBuilder() {
     Row({ space: 14 }) {
-      Image(qgCoverOf(this.getD().cover))
+      Image(qgCoverOf(this.getD().cover, this.getD().sourceId))
         .width(112)
         .aspectRatio(0.75)
         .objectFit(ImageFit.Cover)
@@ -369,7 +369,7 @@ struct QgDetailPage {
           Row({ space: 10 }) {
             ForEach(this.similarList(), (d: QgDrama) => {
               Column() {
-                Image(qgCoverOf(d.cover))
+                Image(qgCoverOf(d.cover, d.sourceId))
                   .width(96)
                   .aspectRatio(0.75)
                   .objectFit(ImageFit.Cover)

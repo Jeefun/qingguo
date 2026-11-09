@@ -290,6 +290,10 @@ export class HanxiaoquanSource extends QgSource {
     return info;
   }
 
+  coverHeaders(url: string): Record<string, string> {
+    return this.headers();
+  }
+
   /** 解析卡片列表（目录与搜索共用） */
   private static parseCards(body: string): QgDrama[] {
     const items: QgDrama[] = [];

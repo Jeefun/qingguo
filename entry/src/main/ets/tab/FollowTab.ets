@@ -85,7 +85,7 @@ export struct FollowTab {
   @Builder
   FollowRowBuilder(rec: QgFollowRecord) {
     Row({ space: 12 }) {
-      Image(qgCoverOf(rec.cover))
+      Image(qgCoverOf(rec.cover, rec.sourceId))
         .width(72)
         .height(96)
         .objectFit(ImageFit.Cover)

@@ -1,13 +1,13 @@
 /**
  * 青果APP 数据门面。
- * 注册全部站源（演示 / 红果 / 韩小圈 / 青空 / 黄豆），向 UI 提供统一的
+ * 注册全部站源（红果 / 韩小圈 / 鬼片 / 青空 / 黄豆 / 剧果 / 野果 / 帝果 /
+ * 禁果短剧 / 禁果 / 黑桃 / 笔盒 / 黄果三源），向 UI 提供统一的
  * 异步目录 / 搜索 / 详情 / 播放能力；当前站源由设置 sourceId 决定。
  * 门面方法失败时向上抛错，由 UI 捕获并展示错误态。
  */
 import { QgAppSettings, QgCategory, QgDrama, QgDramaDetail, QgPageResult, QgPlayInfo } from '../model/QgModels';
 import { QgStore } from './QgStore';
 import { QgSource, QgSourceManager } from './source/QgSource';
-import { DemoSource } from './source/DemoSource';
 import { HongguoSource } from './source/HongguoSource';
 import { HanxiaoquanSource } from './source/HanxiaoquanSource';
 import { SoraniSource } from './source/SoraniSource';
@@ -30,7 +30,6 @@ export class QgRepository {
       return;
     }
     QgRepository.inited = true;
-    QgSourceManager.register(new DemoSource());
     QgSourceManager.register(new HongguoSource());
     QgSourceManager.register(new HanxiaoquanSource());
     QgSourceManager.register(new SoraniSource());
@@ -127,6 +126,16 @@ export class QgRepository {
       throw new Error('未找到该剧所属的站源');
     }
     return source.play(dramaId, episodeId);
+  }
+
+  /** 某源封面/图片加载需要注入的请求头 */
+  static coverHeadersOf(sourceId: string, url: string): Record<string, string> {
+    QgRepository.init();
+    const source: QgSource | undefined = QgSourceManager.byId(sourceId);
+    if (source === undefined) {
+      return {};
+    }
+    return source.coverHeaders(url);
   }
 
   /** 最近第 1 页目录缓存（猜你喜欢 / 热门搜索兜底，可能为空） */

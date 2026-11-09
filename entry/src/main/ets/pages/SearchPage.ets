@@ -259,7 +259,7 @@ struct QgSearchPage {
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
             ForEach(this.results, (d: QgDrama) => {
               Column() {
-                Image(qgCoverOf(d.cover))
+                Image(qgCoverOf(d.cover, d.sourceId))
                   .width('100%')
                   .aspectRatio(0.75)
                   .objectFit(ImageFit.Cover)

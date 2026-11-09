@@ -573,6 +573,10 @@ export class HuangdouSource extends QgSource {
     return info;
   }
 
+  coverHeaders(url: string): Record<string, string> {
+    return { 'User-Agent': UA, 'Referer': `${this.host}/home` };
+  }
+
   /** 试看判定（huangdouPreviewOnly） */
   private static previewOnly(data: Record<string, Object>, media: string): boolean {
     const flag: string = QgJson.pick(data, ['is_preview', 'isPreview']).toLowerCase();

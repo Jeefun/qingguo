@@ -296,7 +296,7 @@ struct QgPlayerPage {
           src: this.playUrl,
           controller: this.controller,
           currentProgressRate: SPEEDS[this.speedIdx],
-          previewUri: qgCoverOf(this.getD().cover)
+          previewUri: qgCoverOf(this.getD().cover, this.getD().sourceId)
         })
           .autoPlay(false)
           .controls(false)

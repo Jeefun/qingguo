@@ -380,7 +380,7 @@ export struct ExploreTab {
   @Builder
   HeroBuilder(d: QgDrama) {
     Stack({ alignContent: Alignment.BottomStart }) {
-      Image(qgCoverOf(d.cover))
+      Image(qgCoverOf(d.cover, d.sourceId))
         .width('100%')
         .aspectRatio(1.6)
         .objectFit(ImageFit.Cover)
@@ -479,6 +479,7 @@ export struct ExploreTab {
               cardTitle: d.title,
               subText: d.finished ? `${d.genre} · 已完结` : `更新至${d.episodeCount}集`,
               badge: d.viewsText,
+              sourceId: d.sourceId,
               onTapCard: () => {
                 this.goDetail(d.id);
               }
@@ -531,7 +532,7 @@ export struct ExploreTab {
         .width(22)
         .textAlign(TextAlign.Center)
 
-      Image(qgCoverOf(d.cover))
+      Image(qgCoverOf(d.cover, d.sourceId))
         .width(48)
         .height(64)
         .objectFit(ImageFit.Cover)

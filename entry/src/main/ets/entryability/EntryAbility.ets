@@ -12,6 +12,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window, display } from '@kit.ArkUI';
 import { BusinessError, deviceInfo } from '@kit.BasicServicesKit';
 import { QgStore } from '../data/QgStore';
+import { QgGateway } from '../data/QgGateway';
 
 const TAG: string = 'QingGuoEntry';
 
@@ -37,6 +38,9 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('carMode', this.currentDisplayId > 0);
     AppStorage.setOrCreate('systemDark', this.isDarkMode());
     AppStorage.setOrCreate('darkMode', this.isDarkEffective());
+    // 本地媒体网关尽早启动：封面与播放地址都要经网关注入 Referer/UA
+    QgGateway.ready().catch(() => {
+    });
   }
 
   onConfigurationUpdate(newConfig: Configuration): void {

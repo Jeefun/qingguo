@@ -5,7 +5,7 @@
  */
 import { preferences } from '@kit.ArkData';
 import { Context } from '@kit.AbilityKit';
-import { QgAppSettings, QgFollowRecord, QgWatchRecord } from '../model/QgModels';
+import { QgAppSettings, QgFollowRecord, QgWatchRecord, qgIsKnownSource } from '../model/QgModels';
 import { QgHttp } from './QgHttp';
 
 const KEY_WATCH: string = 'qg_watch';
@@ -154,6 +154,8 @@ export class QgStore {
     this.settings.danmakuOn = patch.danmakuOn;
     this.settings.danmakuOpacity = patch.danmakuOpacity;
     this.settings.danmakuFontSize = patch.danmakuFontSize;
+    this.settings.danmakuArea = patch.danmakuArea;
+    this.settings.danmakuBlockWords = patch.danmakuBlockWords.slice();
     this.settings.downloadWifiOnly = patch.downloadWifiOnly;
     this.settings.downloadParallel = patch.downloadParallel;
     this.settings.proxyOn = patch.proxyOn;
@@ -288,7 +290,7 @@ export class QgStore {
         s.colorMode = mode;
       }
       const sourceId: Object | undefined = item['sourceId'];
-      if (typeof sourceId === 'string' && sourceId.length > 0) {
+      if (typeof sourceId === 'string' && qgIsKnownSource(sourceId)) {
         s.sourceId = sourceId;
       }
       s.autoPlay = item['autoPlay'] !== false;
@@ -305,6 +307,22 @@ export class QgStore {
       const fontSize: number = Number(item['danmakuFontSize'] ?? 100);
       if (!Number.isNaN(fontSize) && fontSize >= 50 && fontSize <= 150) {
         s.danmakuFontSize = fontSize;
+      }
+      const area: number = Number(item['danmakuArea'] ?? 75);
+      if (!Number.isNaN(area) && area >= 25 && area <= 100) {
+        s.danmakuArea = area;
+      }
+      const blockWords: Object | undefined = item['danmakuBlockWords'];
+      if (blockWords !== null && blockWords !== undefined && typeof blockWords === 'object') {
+        const arr: object[] = blockWords as object[];
+        const words: string[] = [];
+        for (let i: number = 0; i < arr.length; i++) {
+          const w: Object | undefined = arr[i];
+          if (typeof w === 'string' && w.length > 0 && !words.includes(w)) {
+            words.push(w);
+          }
+        }
+        s.danmakuBlockWords = words;
       }
       s.downloadWifiOnly = item['downloadWifiOnly'] !== false;
       const parallel: number = Number(item['downloadParallel'] ?? 2);
