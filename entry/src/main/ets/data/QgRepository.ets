@@ -12,6 +12,17 @@ import { HongguoSource } from './source/HongguoSource';
 import { HanxiaoquanSource } from './source/HanxiaoquanSource';
 import { SoraniSource } from './source/SoraniSource';
 import { HuangdouSource } from './source/HuangdouSource';
+import { GuipianSource } from './source/GuipianSource';
+import { HeitaoSource } from './source/HeitaoSource';
+import { HuangjuSource } from './source/HuangjuSource';
+import { BeaboxSource } from './source/BeaboxSource';
+import { JinguoduanjuSource } from './source/JinguoduanjuSource';
+import { YeguoSource } from './source/YeguoSource';
+import { DsdSource } from './source/DsdSource';
+import { JinguoSource } from './source/JinguoSource';
+import { HuangguoaiSource } from './source/HuangguoaiSource';
+import { HuangguoVideoSource } from './source/HuangguoVideoSource';
+import { LegacySource } from './source/LegacySource';
 
 const DETAIL_CACHE_MS: number = 5 * 60 * 1000;
 const DETAIL_CACHE_MAX: number = 32;
@@ -34,6 +45,17 @@ export class QgRepository {
     QgSourceManager.register(new HanxiaoquanSource());
     QgSourceManager.register(new SoraniSource());
     QgSourceManager.register(new HuangdouSource());
+    QgSourceManager.register(new GuipianSource());
+    QgSourceManager.register(new HeitaoSource());
+    QgSourceManager.register(new HuangjuSource());
+    QgSourceManager.register(new BeaboxSource());
+    QgSourceManager.register(new JinguoduanjuSource());
+    QgSourceManager.register(new YeguoSource());
+    QgSourceManager.register(new DsdSource());
+    QgSourceManager.register(new JinguoSource());
+    QgSourceManager.register(new HuangguoaiSource());
+    QgSourceManager.register(new HuangguoVideoSource());
+    QgSourceManager.register(new LegacySource());
   }
 
   /** 全部已注册站源 */
@@ -186,6 +208,8 @@ export class QgRepository {
     patch.danmakuOn = s.danmakuOn;
     patch.danmakuOpacity = s.danmakuOpacity;
     patch.danmakuFontSize = s.danmakuFontSize;
+    patch.danmakuArea = s.danmakuArea;
+    patch.danmakuBlockWords = s.danmakuBlockWords.slice();
     patch.downloadWifiOnly = s.downloadWifiOnly;
     patch.downloadParallel = s.downloadParallel;
     patch.proxyOn = s.proxyOn;

@@ -14,10 +14,10 @@ import { QgJson } from '../QgJson';
 import { hongguoSignHeaders, newHongguoDeviceId } from './HongguoSign';
 import { QgSource } from './QgSource';
 
-const APP_BASE: string = 'https://api5-normal-sinfonlineb.fqnovel.com';
+export const APP_BASE: string = 'https://api5-normal-sinfonlineb.fqnovel.com';
 const WEB_BASE: string = 'https://hongguoduanju.com';
 const REGISTER_URL: string = 'https://log.snssdk.com/service/2/device_register/';
-const APP_UA: string = 'com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; ' +
+export const APP_UA: string = 'com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; ' +
   'Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)';
 const WEB_UA: string = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) ' +
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1';
@@ -405,6 +405,16 @@ export class HongguoSource extends QgSource {
     super('hongguo', '红果短剧');
   }
 
+  /** 当前设备 ID（弹幕匿名请求用，不触发注册） */
+  static currentDeviceId(): string {
+    return HongguoSource.deviceId;
+  }
+
+  /** 当前安装 ID（弹幕匿名请求用，不触发注册） */
+  static currentInstallId(): string {
+    return HongguoSource.installId;
+  }
+
   categories(): QgCategory[] {
     const out: QgCategory[] = [];
     for (let i: number = 0; i < GENRES.length; i++) {
@@ -413,8 +423,8 @@ export class HongguoSource extends QgSource {
     return out;
   }
 
-  /** 基础查询参数（hongguoAppQuery） */
-  private static appQuery(deviceId: string, installId: string): Record<string, string> {
+  /** 基础查询参数（hongguoAppQuery；弹幕等模块复用） */
+  static appQuery(deviceId: string, installId: string): Record<string, string> {
     return {
       'aid': '8662',
       'app_name': 'novelread',
@@ -1164,7 +1174,10 @@ export class HongguoSource extends QgSource {
       };
       model = fallback;
     }
-    return HongguoSource.selectMedia(model);
+    const info: QgPlayInfo = HongguoSource.selectMedia(model);
+    // 弹幕：评论接口按 videoId 分组（见 HongguoDanmaku.ets）
+    info.danmakuId = videoId;
+    return info;
   }
 
   /** 选择最佳可播变体（selectHongguoAppMedia；加密变体本应用无法解密，直接跳过） */
@@ -1227,7 +1240,7 @@ export class HongguoSource extends QgSource {
         score++;
       }
       for (let j: number = 0; j < addresses.length; j++) {
-        choices.push(new HongguoScored(addresses[j], score));
+        choices.push(new HongguoScored(addresses[j], score, height));
       }
     }
     if (choices.length === 0) {
@@ -1244,6 +1257,25 @@ export class HongguoSource extends QgSource {
     if (!Number.isNaN(durationSeconds) && durationSeconds > 0) {
       info.durationMs = durationSeconds * 1000;
     }
+    // 候选线路（去重保序，最多 16 条）与清晰度列表
+    const seenUrl: Record<string, boolean> = {};
+    const seenQuality: Record<string, boolean> = {};
+    for (let i: number = 0; i < choices.length; i++) {
+      const c: HongguoScored = choices[i];
+      if (seenUrl[c.url] !== true) {
+        seenUrl[c.url] = true;
+        if (info.routes.length < 16) {
+          info.routes.push(c.url);
+        }
+      }
+      const heightKey: string = `${c.height}`;
+      if (c.height > 0 && seenQuality[heightKey] !== true) {
+        seenQuality[heightKey] = true;
+        info.qualities.push(c.height);
+      }
+    }
+    info.qualities.sort((a: number, b: number): number => b - a);
+    info.quality = choices[0].height;
     return info;
   }
 }
@@ -1252,10 +1284,12 @@ export class HongguoSource extends QgSource {
 class HongguoScored {
   url: string = '';
   score: number = 0;
+  height: number = 0;
 
-  constructor(url: string, score: number) {
+  constructor(url: string, score: number, height: number) {
     this.url = url;
     this.score = score;
+    this.height = height;
   }
 }
 

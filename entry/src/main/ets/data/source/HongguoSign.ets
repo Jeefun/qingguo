@@ -114,7 +114,6 @@ export function hongguoGorgon(rawQuery: string, body: Uint8Array | null, stamp: 
 /** X-Argus（hongguoPlayerArgus） */
 export function hongguoArgus(query: string, body: Uint8Array | null, stamp: number,
   deviceId: string, nonce: Uint8Array): string {
-  const key: Uint8Array = qgFromHex(ARGUS_KEY_HEX);
   let bodyHash: Uint8Array = qgSm3(new Uint8Array(16));
   if (body !== null) {
     bodyHash = qgSm3(qgMd5(body));
@@ -151,7 +150,13 @@ export function hongguoArgus(query: string, body: Uint8Array | null, stamp: numb
   message.varintField(21, 738n);
   message.bytesField(23, env.build());
   message.varintField(25, 2n);
-  const data: Uint8Array = pad16(message.build());
+  return hongguoArgusEncode(message.build());
+}
+
+/** Argus 消息加密尾部（播放/评论签名共用） */
+function hongguoArgusEncode(message: Uint8Array): string {
+  const key: Uint8Array = qgFromHex(ARGUS_KEY_HEX);
+  const data: Uint8Array = pad16(message);
   const seed: Uint8Array = new Uint8Array(key.length * 2 + 4);
   seed.set(key, 0);
   seed[key.length] = 0x3c;
@@ -216,6 +221,16 @@ export function hongguoArgus(query: string, body: Uint8Array | null, stamp: numb
 
 /** X-Ladon（hongguoPlayerLadon） */
 export function hongguoLadon(aid: string, stamp: number, prefix: Uint8Array): string {
+  return hongguoLadonEncode(aid, stamp, prefix, aid);
+}
+
+/** X-Ladon（评论版，hongguoCommentLadon）：负载固定 3019 */
+export function hongguoCommentLadon(aid: string, stamp: number, prefix: Uint8Array): string {
+  return hongguoLadonEncode(aid, stamp, prefix, '3019');
+}
+
+/** Ladon 编码（播放/评论共用） */
+function hongguoLadonEncode(aid: string, stamp: number, prefix: Uint8Array, suffix: string): string {
   const aidBytes: Uint8Array = qgUtf8Encode(aid);
   const hashInput: Uint8Array = new Uint8Array(prefix.length + aidBytes.length);
   hashInput.set(prefix, 0);
@@ -233,7 +248,7 @@ export function hongguoLadon(aid: string, stamp: number, prefix: Uint8Array): st
     const shifted: bigint | undefined = queue.shift();
     right = shifted !== undefined ? shifted : 0n;
   }
-  const payload: Uint8Array = qgUtf8Encode(`${stamp}-1611921764-${aid}`);
+  const payload: Uint8Array = qgUtf8Encode(`${stamp}-1611921764-${suffix}`);
   const data: Uint8Array = pad16(payload);
   for (let off: number = 0; off < data.length; off += 16) {
     let l: bigint = qgReadLe64(data, off);
@@ -272,6 +287,103 @@ export function hongguoSignHeaders(rawQuery: string, body: Uint8Array | null,
   headers['X-Gorgon'] = hongguoGorgon(rawQuery, body, stamp);
   headers['X-Argus'] = hongguoArgus(rawQuery, body, stamp, deviceId, nonce);
   headers['X-Ladon'] = hongguoLadon(aid, stamp, nonce.slice(2, 6));
+  return headers;
+}
+
+/** X-Gorgon（评论版，signHongguoCommentRequest；Go byte 运算按 mod 256 回绕） */
+export function hongguoCommentGorgon(rawQuery: string, stamp: number, nonce: Uint8Array): string {
+  const head2: number = ((nonce[0] % 7) + 1) << 5;
+  const head3: number = 0xe0 | (nonce[1] & 15);
+  const seed: Uint8Array = new Uint8Array(20);
+  const queryHash: Uint8Array = qgMd5(qgUtf8Encode(rawQuery));
+  for (let i: number = 0; i < 4; i++) {
+    seed[i] = queryHash[i];
+  }
+  seed[12] = 0;
+  seed[13] = 1;
+  seed[14] = 7;
+  seed[15] = 4;
+  qgWriteBe32(seed, 16, stamp);
+  const key: number[] = [0x4a, 0, 0x16, head3, 0x47, 0x6c, 0, head2];
+  const box: number[] = new Array<number>(256);
+  for (let i: number = 0; i < 256; i++) {
+    box[i] = i;
+  }
+  let j: number = 0;
+  for (let i: number = 0; i < 256; i++) {
+    j = (j + box[i] + key[i & 7]) & 0xff;
+    box[i] = box[j];
+  }
+  j = 0;
+  for (let offset: number = 0; offset < 20; offset++) {
+    const i: number = offset + 1;
+    j = (j + box[i]) & 0xff;
+    box[i] = box[j];
+    seed[offset] = (seed[offset] ^ box[(box[i] + box[j]) & 0xff]) & 0xff;
+  }
+  for (let i: number = 0; i < 20; i++) {
+    seed[i] = (reverse8(rotl8(seed[i], 4) ^ seed[(i + 1) % 20]) ^ 0xeb) & 0xff;
+  }
+  const signature: Uint8Array = new Uint8Array(26);
+  signature[0] = 0x84;
+  signature[1] = 4;
+  signature[2] = head2 & 0xff;
+  signature[3] = head3 & 0xff;
+  signature[4] = 0;
+  signature[5] = 0;
+  for (let i: number = 0; i < 20; i++) {
+    signature[6 + i] = seed[i];
+  }
+  return qgToHex(signature);
+}
+
+/** X-Argus（评论版，hongguoCommentArgus） */
+export function hongguoCommentArgus(query: string, stamp: number, nonce: Uint8Array): string {
+  const bodyHash: Uint8Array = qgSm3(new Uint8Array(16));
+  const queryHash: Uint8Array = qgSm3(qgUtf8Encode(query));
+  const nestedHead: Uint8Array = Uint8Array.from([8, 2 + (nonce[10] % 49) * 2]);
+  const nested: HongguoBuilder = new HongguoBuilder();
+  nested.append(nestedHead);
+  nested.uvarint(16n);
+  nested.uvarint(1388734n);
+  nested.uvarint(24n);
+  nested.uvarint(1388734n);
+  nested.uvarint(32n);
+  nested.uvarint(1388734n);
+  const message: HongguoBuilder = new HongguoBuilder();
+  message.varintField(1, 0x20200929n * 2n);
+  message.varintField(2, 2n);
+  message.varintField(3, BigInt(qgReadLe32(nonce, 6)));
+  message.bytesField(4, qgUtf8Encode('3019'));
+  message.bytesField(6, qgUtf8Encode('1611921764'));
+  message.bytesField(7, qgUtf8Encode('6.8.1.32'));
+  message.bytesField(8, qgUtf8Encode('v04.07.01-ml-android'));
+  message.varintField(9, 135135744n);
+  message.bytesField(10, new Uint8Array(8));
+  message.varintField(12, BigInt(stamp) * 2n);
+  message.bytesField(13, bodyHash.slice(0, 6));
+  message.bytesField(14, queryHash.slice(0, 6));
+  message.bytesField(15, nested.build());
+  message.bytesField(20, qgUtf8Encode('none'));
+  message.varintField(21, 738n);
+  return hongguoArgusEncode(message.build());
+}
+
+/**
+ * 评论/弹幕请求完整签名头（signHongguoCommentRequest）。
+ * @param rawQuery 不含 '?' 的查询串
+ * @param aid      应用 ID（"8662"）
+ */
+export function hongguoCommentSignHeaders(rawQuery: string, aid: string): Record<string, string> {
+  const stamp: number = Math.floor(Date.now() / 1000);
+  const nonce: Uint8Array = qgRandomBytes(11);
+  const headers: Record<string, string> = {};
+  headers['X-Gorgon'] = hongguoCommentGorgon(rawQuery, stamp, nonce);
+  headers['X-Khronos'] = `${stamp}`;
+  headers['X-SS-Req-Ticket'] = `${Date.now()}`;
+  headers['X-SS-STUB'] = '';
+  headers['X-Argus'] = hongguoCommentArgus(rawQuery, stamp, nonce);
+  headers['X-Ladon'] = hongguoCommentLadon(aid, stamp, nonce.slice(2, 6));
   return headers;
 }
 

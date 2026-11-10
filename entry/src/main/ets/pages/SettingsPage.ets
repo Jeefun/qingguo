@@ -3,9 +3,8 @@
  */
 import { curves } from '@kit.ArkUI';
 import { ConfigurationConstant } from '@kit.AbilityKit';
-import { QgAppSettings } from '../model/QgModels';
+import { QgAppSettings, QgSourceDesc, QgSourceGroupInfo, qgSourceDescOf, qgSourceGroups } from '../model/QgModels';
 import { QgRepository } from '../data/QgRepository';
-import { QgSource } from '../data/source/QgSource';
 import { QgStore } from '../data/QgStore';
 import { QgBackBtn } from '../components/QgWidgets';
 
@@ -99,6 +98,8 @@ struct QgSettingsPage {
     s.danmakuOn = cur.danmakuOn;
     s.danmakuOpacity = cur.danmakuOpacity;
     s.danmakuFontSize = cur.danmakuFontSize;
+    s.danmakuArea = cur.danmakuArea;
+    s.danmakuBlockWords = cur.danmakuBlockWords.slice();
     s.downloadWifiOnly = cur.downloadWifiOnly;
     s.downloadParallel = cur.downloadParallel;
     s.proxyOn = this.proxyOn;
@@ -168,25 +169,28 @@ struct QgSettingsPage {
     Column() {
       this.SectionTitleBuilder('站源')
       Column() {
-        ForEach(QgRepository.sources(), (src: QgSource) => {
-          Row({ space: 12 }) {
-            Text(src.name)
-              .fontSize(15)
-              .fontColor(this.sourceId === src.id ? $r('app.color.accent') : $r('app.color.text'))
-              .layoutWeight(1)
-            if (this.sourceId === src.id) {
-              SymbolGlyph($r('sys.symbol.checkmark'))
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor([$r('app.color.accent')])
-            }
+        ForEach(qgSourceGroups(), (group: QgSourceGroupInfo) => {
+          if (group.memberIds.length === 1) {
+            ForEach(group.memberIds, (id: string) => {
+              this.SourceRowBuilder(qgSourceDescOf(id))
+              Divider()
+                .color($r('app.color.divider'))
+                .margin({ left: 16 })
+            }, (id: string) => `group_${group.id}_${id}`)
+          } else {
+            Text(group.name)
+              .fontSize(12)
+              .fontColor($r('app.color.textFaint'))
+              .width('100%')
+              .padding({ left: 16, top: 12, bottom: 4 })
+            ForEach(group.memberIds, (id: string) => {
+              this.SourceRowBuilder(qgSourceDescOf(id))
+              Divider()
+                .color($r('app.color.divider'))
+                .margin({ left: 16 })
+            }, (id: string) => `group_${group.id}_${id}`)
           }
-          .width('100%')
-          .padding(16)
-          .onClick(() => {
-            this.selectSource(src.id);
-          })
-        }, (src: QgSource) => `source_${src.id}`)
+        }, (group: QgSourceGroupInfo) => `src_group_${group.id}`)
       }
       .width('100%')
       .borderRadius(14)
@@ -200,6 +204,37 @@ struct QgSettingsPage {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  SourceRowBuilder(desc: QgSourceDesc | undefined) {
+    if (desc !== undefined) {
+      Row({ space: 12 }) {
+        Column({ space: 2 }) {
+          Text(desc.name)
+            .fontSize(15)
+            .fontColor(this.sourceId === desc.id ? $r('app.color.accent') : $r('app.color.text'))
+          if (desc.desc.length > 0) {
+            Text(desc.desc)
+              .fontSize(11)
+              .fontColor($r('app.color.textFaint'))
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        if (this.sourceId === desc.id) {
+          SymbolGlyph($r('sys.symbol.checkmark'))
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor([$r('app.color.accent')])
+        }
+      }
+      .width('100%')
+      .padding(16)
+      .onClick(() => {
+        this.selectSource(desc.id);
+      })
+    }
   }
 
   private selectSource(id: string): void {
