@@ -25,6 +25,14 @@
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET"
+      },
+      {
+        // 后台听音频：AUDIO_PLAYBACK 长时任务（AVSession 已接入播控中心）
+        "name": "ohos.permission.KEEP_BACKGROUND_RUNNING"
+      },
+      {
+        // Car Kit 出行互联（超级桌面流转状态监听），system_grant 安装即授予
+        "name": "ohos.permission.ACCESS_CAR_DISTRIBUTED_ENGINE"
       }
     ],
     "abilities": [
@@ -34,10 +42,24 @@
         "description": "$string:EntryAbility_desc",
         "icon": "$media:layered_image",
         "label": "$string:EntryAbility_label",
-        "startWindowIcon": "$media:startIcon",
+        "startWindowIcon": "$media:qg_start",
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
         "orientation": "auto_rotation",
+        // 后台听音频：声明音频播放后台模式，配合 AUDIO_PLAYBACK 长时任务
+        "backgroundModes": [
+          "audioPlayback"
+        ],
+        // 超级桌面流转车机全屏适配（社区官方指南）：
+        // 未声明窗口模式与尺寸范围时，系统判定为「手机比例应用」，
+        // 不分配横屏全屏分辨率，流转后只显示在中间安全容器内。
+        "supportWindowMode": [
+          "fullscreen"
+        ],
+        "minWindowWidth": 800,
+        "minWindowHeight": 450,
+        "maxWindowWidth": 3840,
+        "maxWindowHeight": 2160,
         // 多窗布局「动态」可变为横向：必须与 EntryAbility 里的
         // enableLandscapeMultiWindow() 成对使用（SDK 要求本字段为 landscape_auto），
         // 超级桌面流转到问界M9时车机侧才能横向铺满（官方建议视频类应用配置）。

@@ -150,6 +150,8 @@ export class QgDanmakuController {
       this.generation++;
       this.loadingStart = -1;
     }
+    const wasMoving: boolean = this.anchorMoving;
+    const expectedNow: number = this.currentClockMs();
     if (!this.seeking) {
       this.positionMs = positionMs;
     }
@@ -157,7 +159,15 @@ export class QgDanmakuController {
     this.rate = rate > 0 ? rate : 1;
     this.playing = playing;
     this.buffering = buffering;
-    this.resetAnchor();
+    const willMove: boolean = this.danmakuOn && this.playing && !this.buffering && !this.seeking;
+    // Video.onUpdate 的 event.time 为整数秒，连续播放且偏差在 1.3s 内时不重设时钟锚点，
+    // 避免每秒被整数秒拉回产生回弹顿挫。
+    if (!wasMoving || !willMove || jumped || durationChanged ||
+      Math.abs(expectedNow - positionMs) >= 1300) {
+      this.resetAnchor();
+    } else {
+      this.anchorRate = this.rate;
+    }
     this.ensureWindow();
   }
 
@@ -433,7 +443,13 @@ export function planDanmaku(items: QgDanmakuItem[], width: number, rows: number,
   return flights;
 }
 
-/** Canvas 弹幕渲染层（透明覆盖在 Video 上方，不响应点击） */
+interface CachedDanmakuBmp {
+  bmp: ImageBitmap;
+  w: number;
+  h: number;
+}
+
+/** Canvas 弹幕渲染层（OffscreenCanvas 纹理缓存 + 120Hz displaySync 丝滑绘制） */
 @Component
 export struct QgDanmakuView {
   controller: QgDanmakuController | null = null;
@@ -447,10 +463,14 @@ export struct QgDanmakuView {
   private canvasH: number = 0;
   private plan: QgDanmakuFlight[] = [];
   private planKey: string = '';
+  private bmpCache: Map<string, CachedDanmakuBmp> = new Map<string, CachedDanmakuBmp>();
+  private lastDrawMs: number = -1;
+  private lastDrawOpacity: number = -1;
+  private lastDrawKey: string = '';
 
   aboutToAppear(): void {
     const sync: displaySync.DisplaySync = displaySync.create();
-    const range: ExpectedFrameRateRange = { expected: 30, min: 0, max: 120 };
+    const range: ExpectedFrameRateRange = { expected: 120, min: 60, max: 120 };
     sync.setExpectedFrameRateRange(range);
     sync.on('frame', () => {
       this.drawFrame();
@@ -463,6 +483,45 @@ export struct QgDanmakuView {
       this.frameSync.stop();
       this.frameSync = null;
     }
+    this.clearBmpCache();
+  }
+
+  private clearBmpCache(): void {
+    this.bmpCache.forEach((entry: CachedDanmakuBmp) => {
+      try {
+        entry.bmp.close();
+      } catch (e) {
+        // ignore
+      }
+    });
+    this.bmpCache.clear();
+  }
+
+  private getOrCreateBmp(text: string, widthVp: number, fontSize: number): CachedDanmakuBmp {
+    const cacheKey: string = `${text}_${Math.round(fontSize * 10)}`;
+    const existing: CachedDanmakuBmp | undefined = this.bmpCache.get(cacheKey);
+    if (existing !== undefined) {
+      return existing;
+    }
+    if (this.bmpCache.size >= 72) {
+      this.clearBmpCache();
+    }
+    const padX: number = 4;
+    const w: number = Math.ceil(widthVp) + padX * 2;
+    const h: number = Math.ceil(fontSize * 1.42);
+    const off: OffscreenCanvas = new OffscreenCanvas(w, h);
+    const octx: OffscreenCanvasRenderingContext2D = off.getContext('2d', this.renderSettings);
+    octx.font = `bold ${fontSize}vp sans-serif`;
+    octx.lineJoin = 'round';
+    octx.lineWidth = Math.max(2, fontSize * 0.13);
+    octx.strokeStyle = 'rgba(0,0,0,0.78)';
+    octx.fillStyle = '#FFFFFF';
+    const baselineY: number = fontSize * 0.92;
+    octx.strokeText(text, padX, baselineY);
+    octx.fillText(text, padX, baselineY);
+    const entry: CachedDanmakuBmp = { bmp: off.transferToImageBitmap(), w: w, h: h };
+    this.bmpCache.set(cacheKey, entry);
+    return entry;
   }
 
   build() {
@@ -474,6 +533,7 @@ export struct QgDanmakuView {
         this.canvasW = this.ctx.width;
         this.canvasH = this.ctx.height;
         this.planKey = '';
+        this.lastDrawMs = -1;
         if (this.frameSync !== null) {
           this.frameSync.start();
         }
@@ -482,16 +542,28 @@ export struct QgDanmakuView {
 
   private drawFrame(): void {
     const c: QgDanmakuController | null = this.controller;
-    if (c === null || this.canvasW <= 0 || this.canvasH <= 0) {
+    if (c === null) {
+      return;
+    }
+    this.canvasW = this.ctx.width;
+    this.canvasH = this.ctx.height;
+    if (this.canvasW <= 0 || this.canvasH <= 0) {
       return;
     }
     const ctx: CanvasRenderingContext2D = this.ctx;
-    ctx.clearRect(0, 0, this.canvasW, this.canvasH);
     if (!c.supported() || c.items.length === 0) {
+      if (this.lastDrawMs !== -2) {
+        ctx.clearRect(0, 0, this.canvasW, this.canvasH);
+        this.lastDrawMs = -2;
+      }
       return;
     }
-    const fontSize: number = (this.canvasW < 600 ? 16 : 20) * (this.fontScale / 100);
-    const rowHeight: number = fontSize * 1.5;
+    const sizeRatio: number = this.canvasW > this.canvasH ? 0.025 : 0.052;
+    const minFont: number = 18;
+    const maxFont: number = this.canvasW > this.canvasH ? 25 : 23;
+    const fontSize: number =
+      Math.min(Math.max(this.canvasW * sizeRatio, minFont), maxFont) * (this.fontScale / 100);
+    const rowHeight: number = fontSize * 1.42;
     const area: number = Math.min(Math.max(this.areaPercent, 10), 100) / 100;
     let rows: number = Math.floor((this.canvasH * area - 8) / rowHeight);
     rows = Math.min(Math.max(rows, 0), QG_DANMAKU_MAX_ROWS);
@@ -501,22 +573,32 @@ export struct QgDanmakuView {
     const key: string = `${c.dataRevision}_${Math.floor(this.canvasW)}_${rows}_${this.fontScale}`;
     if (key !== this.planKey) {
       this.planKey = key;
-      ctx.font = `bold ${fontSize}px sans-serif`;
+      this.clearBmpCache();
+      ctx.font = `bold ${fontSize}vp sans-serif`;
       this.plan = planDanmaku(c.items, this.canvasW, rows, (text: string): number => {
         return ctx.measureText(text).width;
       });
+      this.lastDrawMs = -1;
     }
     if (this.plan.length === 0) {
+      if (this.lastDrawMs !== -2) {
+        ctx.clearRect(0, 0, this.canvasW, this.canvasH);
+        this.lastDrawMs = -2;
+      }
       return;
     }
     const now: number = c.currentClockMs();
     const alpha: number = Math.min(Math.max(this.opacityPercent, 10), 100) / 100;
-    ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.shadowColor = `rgba(0,0,0,${0.72 * alpha})`;
-    ctx.shadowBlur = 3;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    // 暂停且参数未变时跳过重复重绘
+    if (now === this.lastDrawMs && alpha === this.lastDrawOpacity && key === this.lastDrawKey) {
+      return;
+    }
+    this.lastDrawMs = now;
+    this.lastDrawOpacity = alpha;
+    this.lastDrawKey = key;
+
+    ctx.clearRect(0, 0, this.canvasW, this.canvasH);
+    ctx.globalAlpha = alpha;
     for (let i: number = 0; i < this.plan.length; i++) {
       const f: QgDanmakuFlight = this.plan[i];
       const startMs: number = f.item.timeMs;
@@ -528,8 +610,10 @@ export struct QgDanmakuView {
       }
       const progress: number = (now - startMs) / QG_DANMAKU_LIFETIME_MS;
       const x: number = this.canvasW - (this.canvasW + f.widthPx) * progress;
-      const y: number = 8 + f.lane * rowHeight + fontSize * 0.85;
-      ctx.fillText(f.text, x, y);
+      const y: number = 8 + f.lane * rowHeight;
+      const cached: CachedDanmakuBmp = this.getOrCreateBmp(f.text, f.widthPx, fontSize);
+      ctx.drawImage(cached.bmp, x, y, cached.w, cached.h);
     }
+    ctx.globalAlpha = 1;
   }
 }

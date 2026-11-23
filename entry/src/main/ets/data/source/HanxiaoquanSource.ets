@@ -164,7 +164,7 @@ export class HanxiaoquanSource extends QgSource {
 
   private async get(path: string): Promise<string> {
     return QgHttp.getText(path.startsWith('http') ? path : `${SITE}${path}`,
-      this.headers(), TIMEOUT);
+      this.headers(), TIMEOUT, this.id);
   }
 
   async catalogPage(categoryId: string, page: number): Promise<QgPageResult> {

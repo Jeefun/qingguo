@@ -177,7 +177,7 @@ export class SoraniSource extends QgSource {
 
   /** GET API 并解析 JSON（含 code!=200 错误与 data 解包） */
   private async call(route: string, query: string): Promise<Object> {
-    const text: string = await QgHttp.getText(`${API}${route}${query}`, headers(), TIMEOUT);
+    const text: string = await QgHttp.getText(`${API}${route}${query}`, headers(), TIMEOUT, this.id);
     const root: Record<string, Object> | null = QgJson.obj(QgJson.parse(text));
     if (root === null) {
       throw new Error('青空次元返回的数据格式无效');

@@ -136,7 +136,7 @@ export function hongguoArgus(query: string, body: Uint8Array | null, stamp: numb
   message.bytesField(4, qgUtf8Encode('8662'));
   message.bytesField(5, qgUtf8Encode(deviceId));
   message.bytesField(6, qgUtf8Encode('1611921764'));
-  message.bytesField(7, qgUtf8Encode('7.3.5.32'));
+  message.bytesField(7, qgUtf8Encode('7.4.5.32'));
   message.bytesField(8, qgUtf8Encode('v04.07.01-ml-android'));
   message.varintField(9, 135135744n);
   message.bytesField(10, new Uint8Array(8));

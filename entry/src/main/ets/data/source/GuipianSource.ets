@@ -646,6 +646,6 @@ export class GuipianSource extends QgSource {
       'Referer': `${GP_SITE}/`,
       'Accept-Language': 'zh-CN,zh;q=0.9'
     };
-    return QgHttp.getText(address, headers, GP_TIMEOUT_MS);
+    return QgHttp.getText(address, headers, GP_TIMEOUT_MS, this.id);
   }
 }

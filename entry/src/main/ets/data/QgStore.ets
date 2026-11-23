@@ -5,13 +5,17 @@
  */
 import { preferences } from '@kit.ArkData';
 import { Context } from '@kit.AbilityKit';
-import { QgAppSettings, QgFollowRecord, QgWatchRecord, qgIsKnownSource } from '../model/QgModels';
-import { QgHttp } from './QgHttp';
+import { QgAppSettings, QgBookmarkRecord, QgFollowRecord, QgQueueRecord, QgSourceProxy, QgWatchRecord, qgIsKnownSource } from '../model/QgModels';
+import { QgHttp, QgHttpProxy } from './QgHttp';
+import { QgTheme } from '../components/QgTheme';
 
 const KEY_WATCH: string = 'qg_watch';
 const KEY_FOLLOWS: string = 'qg_follows';
 const KEY_SEARCH: string = 'qg_search_history';
 const KEY_SETTINGS: string = 'qg_settings';
+const KEY_QUEUE: string = 'qg_watch_queue';
+const KEY_BOOKMARKS: string = 'qg_bookmarks';
+const KEY_INTRO_MARKS: string = 'qg_intro_marks';
 
 export class QgStore {
   private static instance: QgStore | null = null;
@@ -21,6 +25,9 @@ export class QgStore {
   private followList: QgFollowRecord[] = [];
   private searchList: string[] = [];
   private settings: QgAppSettings = new QgAppSettings();
+  private queueList: QgQueueRecord[] = [];
+  private bookmarkList: QgBookmarkRecord[] = [];
+  private introMarks: Record<string, number> = {};
 
   static getInstance(): QgStore {
     if (QgStore.instance === null) {
@@ -29,13 +36,17 @@ export class QgStore {
     return QgStore.instance as QgStore;
   }
 
-  /** 初始化（EntryAbility onCreate 调用），幂等 */
-  async init(context: Context): Promise<void> {
+  /**
+   * 初始化（EntryAbility onCreate 调用），幂等。
+   * 必须同步：UI 在 onCreate 之后立即渲染，原来的异步 getPreferences 会让首页
+   * 先读到默认设置（站源回退 hongguo、代理开关丢失），表现为「切换站源重启后失效」。
+   */
+  init(context: Context): void {
     if (this.pref !== null) {
       return;
     }
     try {
-      this.pref = await preferences.getPreferences(context, 'qingguo_store');
+      this.pref = preferences.getPreferencesSync(context, { name: 'qingguo_store' });
       this.loadAll();
     } catch (error) {
       this.pref = null;
@@ -81,6 +92,84 @@ export class QgStore {
   clearWatch(): void {
     this.watchList = [];
     this.persist(KEY_WATCH, JSON.stringify(this.watchList));
+  }
+
+  // ---------- 待看队列 ----------
+
+  getQueueList(): QgQueueRecord[] {
+    return this.queueList.slice().sort((a: QgQueueRecord, b: QgQueueRecord): number => a.addedAt - b.addedAt);
+  }
+
+  isQueued(dramaId: string): boolean {
+    return this.queueList.some((r: QgQueueRecord): boolean => r.dramaId === dramaId);
+  }
+
+  toggleQueue(dramaId: string, title: string, cover: string, episodeCount: number,
+    finished: boolean, sourceId: string): boolean {
+    const idx = this.queueList.findIndex((r: QgQueueRecord): boolean => r.dramaId === dramaId);
+    if (idx >= 0) {
+      this.queueList.splice(idx, 1);
+      this.persist(KEY_QUEUE, JSON.stringify(this.queueList));
+      return false;
+    }
+    const rec: QgQueueRecord = new QgQueueRecord();
+    rec.dramaId = dramaId;
+    rec.addedAt = Date.now();
+    rec.title = title;
+    rec.cover = cover;
+    rec.episodeCount = episodeCount;
+    rec.finished = finished;
+    rec.sourceId = sourceId;
+    this.queueList.push(rec);
+    this.persist(KEY_QUEUE, JSON.stringify(this.queueList));
+    return true;
+  }
+
+  removeQueue(dramaId: string): void {
+    this.queueList = this.queueList.filter((r: QgQueueRecord): boolean => r.dramaId !== dramaId);
+    this.persist(KEY_QUEUE, JSON.stringify(this.queueList));
+  }
+
+  // ---------- 片段书签 ----------
+
+  getBookmarks(dramaId: string, episode: number): QgBookmarkRecord[] {
+    return this.bookmarkList.filter((r: QgBookmarkRecord): boolean => r.dramaId === dramaId && r.episode === episode)
+      .sort((a: QgBookmarkRecord, b: QgBookmarkRecord): number => a.seconds - b.seconds);
+  }
+
+  addBookmark(record: QgBookmarkRecord): void {
+    if (record.dramaId.length === 0 || record.seconds < 0) {
+      return;
+    }
+    const exists = this.bookmarkList.some((r: QgBookmarkRecord): boolean =>
+      r.dramaId === record.dramaId && r.episode === record.episode && Math.abs(r.seconds - record.seconds) < 3);
+    if (exists) {
+      return;
+    }
+    const saved: QgBookmarkRecord = new QgBookmarkRecord();
+    saved.dramaId = record.dramaId;
+    saved.title = record.title;
+    saved.episode = record.episode;
+    saved.seconds = record.seconds;
+    saved.createdAt = record.createdAt > 0 ? record.createdAt : Date.now();
+    this.bookmarkList.push(saved);
+    this.persist(KEY_BOOKMARKS, JSON.stringify(this.bookmarkList));
+  }
+
+  removeBookmark(record: QgBookmarkRecord): void {
+    this.bookmarkList = this.bookmarkList.filter((r: QgBookmarkRecord): boolean =>
+      !(r.dramaId === record.dramaId && r.episode === record.episode && r.createdAt === record.createdAt));
+    this.persist(KEY_BOOKMARKS, JSON.stringify(this.bookmarkList));
+  }
+
+  getIntroMark(dramaId: string): number {
+    return this.introMarks[dramaId] ?? 0;
+  }
+
+  setIntroMark(dramaId: string, seconds: number): void {
+    if (dramaId.length === 0 || seconds < 1) return;
+    this.introMarks[dramaId] = Math.floor(seconds);
+    this.persist(KEY_INTRO_MARKS, JSON.stringify(this.introMarks));
   }
 
   // ---------- 追剧 ----------
@@ -139,6 +228,32 @@ export class QgStore {
     this.persist(KEY_SEARCH, JSON.stringify(this.searchList));
   }
 
+  getTheme(): string {
+    try {
+      const value: string = this.pref !== null ? this.pref.getSync('qg_theme', 'lime') as string : 'lime';
+      return QgTheme.normalize(value);
+    } catch (error) {
+      return 'lime';
+    }
+  }
+
+  getString(key: string, fallback: string = ''): string {
+    try {
+      return this.pref !== null ? this.pref.getSync(key, fallback) as string : fallback;
+    } catch (error) {
+      return fallback;
+    }
+  }
+
+  setString(key: string, value: string): void {
+    this.persist(key, value);
+  }
+  setTheme(value: string): void {
+    const theme: string = QgTheme.normalize(value);
+    this.persist('qg_theme', theme);
+    AppStorage.setOrCreate('qgTheme', theme);
+  }
+
   // ---------- 应用设置 ----------
 
   getSettings(): QgAppSettings {
@@ -150,7 +265,9 @@ export class QgStore {
     this.settings.sourceId = patch.sourceId;
     this.settings.autoPlay = patch.autoPlay;
     this.settings.autoNext = patch.autoNext;
+    this.settings.directPlay = patch.directPlay;
     this.settings.playSpeed = patch.playSpeed;
+    this.settings.videoAspect = patch.videoAspect === 'fill' ? 'fill' : 'original';
     this.settings.danmakuOn = patch.danmakuOn;
     this.settings.danmakuOpacity = patch.danmakuOpacity;
     this.settings.danmakuFontSize = patch.danmakuFontSize;
@@ -161,15 +278,59 @@ export class QgStore {
     this.settings.proxyOn = patch.proxyOn;
     this.settings.proxyHost = patch.proxyHost;
     this.settings.proxyPort = patch.proxyPort;
+    this.settings.sourceProxies = QgStore.copySourceProxies(patch.sourceProxies);
+    this.settings.homeContinue = patch.homeContinue;
+    this.settings.homeRank = patch.homeRank;
+    this.settings.homeRecommendations = patch.homeRecommendations;
     this.applyNetwork();
     this.persist(KEY_SETTINGS, JSON.stringify(this.settings));
   }
 
-  /** 代理设置 → QgHttp */
+  /** 代理设置 → QgHttp（全局 + 按站源解析器） */
   private applyNetwork(): void {
     QgHttp.proxy.enabled = this.settings.proxyOn;
     QgHttp.proxy.host = this.settings.proxyHost;
     QgHttp.proxy.port = this.settings.proxyPort;
+    QgHttp.proxyResolver = (sourceId: string): QgHttpProxy => this.resolveProxyFor(sourceId);
+  }
+
+  /** 解析某站源的生效代理：direct=强制直连，manual=独立代理，其余跟随全局 */
+  private resolveProxyFor(sourceId: string): QgHttpProxy {
+    const override: QgSourceProxy | undefined = this.settings.sourceProxies[sourceId];
+    if (override !== undefined) {
+      if (override.mode === 'direct') {
+        const direct: QgHttpProxy = new QgHttpProxy();
+        direct.enabled = false;
+        return direct;
+      }
+      if (override.mode === 'manual' && override.host.length > 0 && override.port > 0) {
+        const manual: QgHttpProxy = new QgHttpProxy();
+        manual.enabled = true;
+        manual.host = override.host;
+        manual.port = override.port;
+        return manual;
+      }
+    }
+    return QgHttp.proxy;
+  }
+
+  /** 深拷贝按站源代理覆盖（避免与外部实例共享引用） */
+  private static copySourceProxies(src: Record<string, QgSourceProxy>): Record<string, QgSourceProxy> {
+    const out: Record<string, QgSourceProxy> = {};
+    const keys: string[] = Object.keys(src);
+    for (let i: number = 0; i < keys.length; i++) {
+      const key: string = keys[i];
+      const item: QgSourceProxy | undefined = src[key];
+      if (item === undefined) {
+        continue;
+      }
+      const copy: QgSourceProxy = new QgSourceProxy();
+      copy.mode = item.mode;
+      copy.host = item.host;
+      copy.port = item.port;
+      out[key] = copy;
+    }
+    return out;
   }
 
   // ---------- 内部 ----------
@@ -181,6 +342,9 @@ export class QgStore {
     }
     this.watchList = QgStore.parseWatch(p.getSync(KEY_WATCH, '[]') as string);
     this.followList = QgStore.parseFollows(p.getSync(KEY_FOLLOWS, '[]') as string);
+    this.queueList = QgStore.parseQueue(p.getSync(KEY_QUEUE, '[]') as string);
+    this.bookmarkList = QgStore.parseBookmarks(p.getSync(KEY_BOOKMARKS, '[]') as string);
+    this.introMarks = QgStore.parseNumberMap(p.getSync(KEY_INTRO_MARKS, '{}') as string);
     this.searchList = QgStore.parseStrings(p.getSync(KEY_SEARCH, '[]') as string);
     this.settings = QgStore.parseSettings(p.getSync(KEY_SETTINGS, '') as string);
     this.applyNetwork();
@@ -262,6 +426,63 @@ export class QgStore {
     return out;
   }
 
+  private static parseQueue(raw: string): QgQueueRecord[] {
+    const out: QgQueueRecord[] = [];
+    try {
+      const arr: object[] = JSON.parse(raw) as object[];
+      for (let i = 0; i < arr.length; i++) {
+        const item: Record<string, Object> = arr[i] as Record<string, Object>;
+        const r: QgQueueRecord = new QgQueueRecord();
+        r.dramaId = `${item['dramaId'] ?? ''}`;
+        r.addedAt = Number(item['addedAt'] ?? 0);
+        r.title = `${item['title'] ?? ''}`;
+        r.cover = `${item['cover'] ?? ''}`;
+        r.episodeCount = Number(item['episodeCount'] ?? 0);
+        r.finished = item['finished'] !== false;
+        r.sourceId = `${item['sourceId'] ?? ''}`;
+        if (r.dramaId.length > 0) out.push(r);
+      }
+    } catch (error) {
+      return [];
+    }
+    return out;
+  }
+
+  private static parseBookmarks(raw: string): QgBookmarkRecord[] {
+    const out: QgBookmarkRecord[] = [];
+    try {
+      const arr: object[] = JSON.parse(raw) as object[];
+      for (let i = 0; i < arr.length; i++) {
+        const item: Record<string, Object> = arr[i] as Record<string, Object>;
+        const r: QgBookmarkRecord = new QgBookmarkRecord();
+        r.dramaId = `${item['dramaId'] ?? ''}`;
+        r.title = `${item['title'] ?? ''}`;
+        r.episode = Number(item['episode'] ?? 1);
+        r.seconds = Number(item['seconds'] ?? 0);
+        r.createdAt = Number(item['createdAt'] ?? 0);
+        if (r.dramaId.length > 0) out.push(r);
+      }
+    } catch (error) {
+      return [];
+    }
+    return out;
+  }
+
+  private static parseNumberMap(raw: string): Record<string, number> {
+    const out: Record<string, number> = {};
+    try {
+      const item: Record<string, Object> = JSON.parse(raw) as Record<string, Object>;
+      const keys: string[] = Object.keys(item);
+      for (let i = 0; i < keys.length; i++) {
+        const value: number = Number(item[keys[i]]);
+        if (!Number.isNaN(value) && value > 0) out[keys[i]] = value;
+      }
+    } catch (error) {
+      return {};
+    }
+    return out;
+  }
+
   private static parseStrings(raw: string): string[] {
     const out: string[] = [];
     try {
@@ -290,14 +511,19 @@ export class QgStore {
         s.colorMode = mode;
       }
       const sourceId: Object | undefined = item['sourceId'];
-      if (typeof sourceId === 'string' && qgIsKnownSource(sourceId)) {
+      if (typeof sourceId === 'string' && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(sourceId)) {
         s.sourceId = sourceId;
       }
       s.autoPlay = item['autoPlay'] !== false;
       s.autoNext = item['autoNext'] !== false;
+      s.directPlay = item['directPlay'] === true;
       const playSpeed: number = Number(item['playSpeed'] ?? 1);
       if (!Number.isNaN(playSpeed) && playSpeed >= 0.5 && playSpeed <= 3) {
         s.playSpeed = playSpeed;
+      }
+      const videoAspect: Object | undefined = item['videoAspect'];
+      if (typeof videoAspect === 'string' && (videoAspect === 'original' || videoAspect === 'fill')) {
+        s.videoAspect = videoAspect;
       }
       s.danmakuOn = item['danmakuOn'] !== false;
       const opacity: number = Number(item['danmakuOpacity'] ?? 80);
@@ -338,6 +564,46 @@ export class QgStore {
       if (!Number.isNaN(port) && port > 0 && port < 65536) {
         s.proxyPort = port;
       }
+      const rawProxies: Object | undefined = item['sourceProxies'];
+      if (rawProxies !== null && rawProxies !== undefined && typeof rawProxies === 'object') {
+        const entries: Record<string, Object> = rawProxies as Record<string, Object>;
+        const ids: string[] = Object.keys(entries);
+        for (let i: number = 0; i < ids.length; i++) {
+          const id: string = ids[i];
+          if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(id)) {
+            continue;
+          }
+          const raw: Object | undefined = entries[id];
+          if (raw === null || raw === undefined || typeof raw !== 'object') {
+            continue;
+          }
+          const row: Record<string, Object> = raw as Record<string, Object>;
+          const mode: Object | undefined = row['mode'];
+          if (typeof mode !== 'string' || (mode !== 'direct' && mode !== 'manual')) {
+            continue;
+          }
+          const proxy: QgSourceProxy = new QgSourceProxy();
+          proxy.mode = mode;
+          const host: Object | undefined = row['host'];
+          if (typeof host === 'string' && host.length > 0 && host.length <= 253) {
+            proxy.host = host;
+          }
+          const portRaw: Object | undefined = row['port'];
+          const proxyPort: number = portRaw === undefined ? 7890 : Number(portRaw);
+          if (!Number.isNaN(proxyPort) && proxyPort > 0 && proxyPort < 65536) {
+            proxy.port = proxyPort;
+          } else if (proxy.mode === 'manual') {
+            continue;
+          }
+          if (proxy.mode === 'manual' && (proxy.host.length === 0 || proxy.port <= 0)) {
+            continue;
+          }
+          s.sourceProxies[id] = proxy;
+        }
+      }
+      s.homeContinue = item['homeContinue'] !== false;
+      s.homeRank = item['homeRank'] !== false;
+      s.homeRecommendations = item['homeRecommendations'] !== false;
     } catch (error) {
       return new QgAppSettings();
     }

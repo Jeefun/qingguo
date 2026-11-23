@@ -842,7 +842,7 @@ export class HuangguoaiSource extends QgSource {
         let resp: QgHttpResponse;
         try {
           resp = await QgHttp.request(candidate, payload !== null ? 'POST' : 'GET', headers, payload,
-            multi ? HGA_CANDIDATE_TIMEOUT_MS : HGA_TIMEOUT_MS);
+            multi ? HGA_CANDIDATE_TIMEOUT_MS : HGA_TIMEOUT_MS, 0, 30, this.id);
         } catch (error) {
           lastError = error as Error;
           continue;

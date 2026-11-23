@@ -155,7 +155,7 @@ async function requestDanmakuPage(seriesId: string, videoId: string,
     }
     let resp: QgHttpResponse | null = null;
     try {
-      resp = await QgHttp.request(url, 'POST', headers, body, DANMAKU_TIMEOUT);
+      resp = await QgHttp.request(url, 'POST', headers, body, DANMAKU_TIMEOUT, 0, 30, 'hongguo');
     } catch (error) {
       lastError = error as Error;
       continue;

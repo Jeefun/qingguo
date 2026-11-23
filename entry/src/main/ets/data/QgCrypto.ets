@@ -210,6 +210,110 @@ export function qgHmacSha256(key: Uint8Array, message: Uint8Array): Uint8Array {
   return qgSha256(qgConcat([opad, qgSha256(qgConcat([ipad, message]))]));
 }
 
+// ---------------- SHA-512 ----------------
+
+const SHA512_K: bigint[] = [0x428a2f98d728ae22n, 0x7137449123ef65cdn, 0xb5c0fbcfec4d3b2fn, 0xe9b5dba58189dbbcn,
+  0x3956c25bf348b538n, 0x59f111f1b605d019n, 0x923f82a4af194f9bn, 0xab1c5ed5da6d8118n,
+  0xd807aa98a3030242n, 0x12835b0145706fben, 0x243185be4ee4b28cn, 0x550c7dc3d5ffb4e2n,
+  0x72be5d74f27b896fn, 0x80deb1fe3b1696b1n, 0x9bdc06a725c71235n, 0xc19bf174cf692694n,
+  0xe49b69c19ef14ad2n, 0xefbe4786384f25e3n, 0x0fc19dc68b8cd5b5n, 0x240ca1cc77ac9c65n,
+  0x2de92c6f592b0275n, 0x4a7484aa6ea6e483n, 0x5cb0a9dcbd41fbd4n, 0x76f988da831153b5n,
+  0x983e5152ee66dfabn, 0xa831c66d2db43210n, 0xb00327c898fb213fn, 0xbf597fc7beef0ee4n,
+  0xc6e00bf33da88fc2n, 0xd5a79147930aa725n, 0x06ca6351e003826fn, 0x142929670a0e6e70n,
+  0x27b70a8546d22ffcn, 0x2e1b21385c26c926n, 0x4d2c6dfc5ac42aedn, 0x53380d139d95b3dfn,
+  0x650a73548baf63den, 0x766a0abb3c77b2a8n, 0x81c2c92e47edaee6n, 0x92722c851482353bn,
+  0xa2bfe8a14cf10364n, 0xa81a664bbc423001n, 0xc24b8b70d0f89791n, 0xc76c51a30654be30n,
+  0xd192e819d6ef5218n, 0xd69906245565a910n, 0xf40e35855771202an, 0x106aa07032bbd1b8n,
+  0x19a4c116b8d2d0c8n, 0x1e376c085141ab53n, 0x2748774cdf8eeb99n, 0x34b0bcb5e19b48a8n,
+  0x391c0cb3c5c95a63n, 0x4ed8aa4ae3418acbn, 0x5b9cca4f7763e373n, 0x682e6ff3d6b2b8a3n,
+  0x748f82ee5defb2fcn, 0x78a5636f43172f60n, 0x84c87814a1f0ab72n, 0x8cc702081a6439ecn,
+  0x90befffa23631e28n, 0xa4506cebde82bde9n, 0xbef9a3f7b2c67915n, 0xc67178f2e372532bn,
+  0xca273eceea26619cn, 0xd186b8c721c0c207n, 0xeada7dd6cde0eb1en, 0xf57d4f7fee6ed178n,
+  0x06f067aa72176fban, 0x0a637dc5a2c898a6n, 0x113f9804bef90daen, 0x1b710b35131c471bn,
+  0x28db77f523047d84n, 0x32caab7b40c72493n, 0x3c9ebe0a15c9bebcn, 0x431d67c49c100d4cn,
+  0x4cc5d4becb3e42b6n, 0x597f299cfc657e2an, 0x5fcb6fab3ad6faecn, 0x6c44198c4a475817n];
+
+const SHA512_MASK: bigint = 0xffffffffffffffffn;
+
+function rotr64(x: bigint, n: number): bigint {
+  return ((x >> BigInt(n)) | (x << BigInt(64 - n))) & SHA512_MASK;
+}
+
+/** SHA-512 摘要（64 字节） */
+export function qgSha512(input: Uint8Array): Uint8Array {
+  const bitLength: bigint = BigInt(input.length) * 8n;
+  const parts: Uint8Array[] = [input, Uint8Array.from([0x80])];
+  let total: number = input.length + 1;
+  while (total % 128 !== 112) {
+    parts.push(Uint8Array.from([0]));
+    total++;
+  }
+  const lenBytes: Uint8Array = new Uint8Array(16);
+  let remaining: bigint = bitLength;
+  for (let i: number = 15; i >= 0; i--) {
+    lenBytes[i] = Number(remaining & 0xffn);
+    remaining >>= 8n;
+  }
+  parts.push(lenBytes);
+  const data: Uint8Array = qgConcat(parts);
+
+  const h: bigint[] = [0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn, 0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,
+    0x510e527fade682d1n, 0x9b05688c2b3e6c1fn, 0x1f83d9abfb41bd6bn, 0x5be0cd19137e2179n];
+  const w: bigint[] = new Array(80);
+  for (let chunk: number = 0; chunk < data.length; chunk += 128) {
+    for (let i: number = 0; i < 16; i++) {
+      const o: number = chunk + i * 8;
+      w[i] = (BigInt(data[o]) << 56n) | (BigInt(data[o + 1]) << 48n) | (BigInt(data[o + 2]) << 40n) |
+        (BigInt(data[o + 3]) << 32n) | (BigInt(data[o + 4]) << 24n) | (BigInt(data[o + 5]) << 16n) |
+        (BigInt(data[o + 6]) << 8n) | BigInt(data[o + 7]);
+    }
+    for (let i: number = 16; i < 80; i++) {
+      const s0: bigint = rotr64(w[i - 15], 1) ^ rotr64(w[i - 15], 8) ^ (w[i - 15] >> 7n);
+      const s1: bigint = rotr64(w[i - 2], 19) ^ rotr64(w[i - 2], 61) ^ (w[i - 2] >> 6n);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & SHA512_MASK;
+    }
+    let a: bigint = h[0];
+    let b: bigint = h[1];
+    let c: bigint = h[2];
+    let d: bigint = h[3];
+    let e: bigint = h[4];
+    let f: bigint = h[5];
+    let g: bigint = h[6];
+    let hh: bigint = h[7];
+    for (let i: number = 0; i < 80; i++) {
+      const s1: bigint = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
+      const ch: bigint = (e & f) ^ (~e & g);
+      const t1: bigint = (hh + s1 + ch + SHA512_K[i] + w[i]) & SHA512_MASK;
+      const s0: bigint = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
+      const maj: bigint = (a & b) ^ (a & c) ^ (b & c);
+      const t2: bigint = (s0 + maj) & SHA512_MASK;
+      hh = g;
+      g = f;
+      f = e;
+      e = (d + t1) & SHA512_MASK;
+      d = c;
+      c = b;
+      b = a;
+      a = (t1 + t2) & SHA512_MASK;
+    }
+    h[0] = (h[0] + a) & SHA512_MASK;
+    h[1] = (h[1] + b) & SHA512_MASK;
+    h[2] = (h[2] + c) & SHA512_MASK;
+    h[3] = (h[3] + d) & SHA512_MASK;
+    h[4] = (h[4] + e) & SHA512_MASK;
+    h[5] = (h[5] + f) & SHA512_MASK;
+    h[6] = (h[6] + g) & SHA512_MASK;
+    h[7] = (h[7] + hh) & SHA512_MASK;
+  }
+  const out: Uint8Array = new Uint8Array(64);
+  for (let i: number = 0; i < 8; i++) {
+    for (let j: number = 0; j < 8; j++) {
+      out[i * 8 + j] = Number((h[i] >> BigInt(56 - j * 8)) & 0xffn);
+    }
+  }
+  return out;
+}
+
 // ---------------- SM3 ----------------
 
 /** SM3 密码杂凑摘要（32 字节），国密标准 GB/T 32905-2016 */
@@ -531,6 +635,25 @@ export function qgAesCbcDecrypt(cipherText: Uint8Array, key: Uint8Array, iv: Uin
   return qgPkcs7Unpad(out);
 }
 
+/** AES-CBC 解密（不去填充，用于手动校验 PKCS7），密文必须 16 字节对齐 */
+export function qgAesCbcDecryptNoUnpad(cipherText: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8Array {
+  if (cipherText.length % 16 !== 0) {
+    return new Uint8Array(0);
+  }
+  const roundKeys: Uint8Array[] = aesExpandKey(key);
+  const out: Uint8Array = new Uint8Array(cipherText.length);
+  const dec: Uint8Array = new Uint8Array(16);
+  let prev: Uint8Array = iv;
+  for (let off: number = 0; off < cipherText.length; off += 16) {
+    aesDecryptBlock(roundKeys, cipherText.slice(off, off + 16), dec);
+    for (let i: number = 0; i < 16; i++) {
+      out[off + i] = (dec[i] ^ prev[i]) & 0xff;
+    }
+    prev = cipherText.slice(off, off + 16);
+  }
+  return out;
+}
+
 /** AES-CBC 加密（无填充，输入必须已对齐，用于 X-Argus 容器） */
 export function qgAesCbcEncryptNoPad(plain: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8Array {
   if (plain.length % 16 !== 0) {
@@ -551,4 +674,37 @@ export function qgAesCbcEncryptNoPad(plain: Uint8Array, key: Uint8Array, iv: Uin
       enc[8], enc[9], enc[10], enc[11], enc[12], enc[13], enc[14], enc[15]]);
   }
   return out;
+}
+
+/** AES 轮密钥扩展（导出版，供 CTR 等模式复用） */
+export function qgAesExpandKey(key: Uint8Array): Uint8Array[] {
+  return aesExpandKey(key);
+}
+
+/**
+ * AES-CTR 就地加/解密（CENC cenc-aes-ctr：128 位大端计数器整体 +1）。
+ * roundKeys 为 qgAesExpandKey 结果；iv 为 16 字节完整计数器初值；
+ * 只处理 data[start, end) 区间，区间内按块对齐生成 keystream 并异或。
+ */
+export function qgAesCtrCrypt(roundKeys: Uint8Array[], iv: Uint8Array,
+  data: Uint8Array, start: number, end: number): void {
+  const counter: Uint8Array = new Uint8Array(16);
+  counter.set(iv.subarray(0, 16), 0);
+  const stream: Uint8Array = new Uint8Array(16);
+  let blockStart: number = start;
+  while (blockStart < end) {
+    aesEncryptBlock(roundKeys, counter, stream);
+    const blockEnd: number = Math.min(blockStart + 16, end);
+    for (let i: number = 0; i < blockEnd - blockStart; i++) {
+      data[blockStart + i] = (data[blockStart + i] ^ stream[i]) & 0xff;
+    }
+    // 计数器 128 位大端 +1
+    for (let i: number = 15; i >= 0; i--) {
+      counter[i] = (counter[i] + 1) & 0xff;
+      if (counter[i] !== 0) {
+        break;
+      }
+    }
+    blockStart = blockEnd;
+  }
 }

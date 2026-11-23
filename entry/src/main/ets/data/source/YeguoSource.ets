@@ -1107,7 +1107,7 @@ async function ygFetchText(address: string, referer: string, timeoutMs: number, 
     'Referer': referer,
     'Accept-Language': 'zh-CN,zh;q=0.9'
   };
-  const resp: QgHttpResponse = await QgHttp.request(address, 'GET', headers, null, timeoutMs);
+  const resp: QgHttpResponse = await QgHttp.request(address, 'GET', headers, null, timeoutMs, 0, 30, 'yeguo');
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`野果页面请求失败：HTTP ${resp.status}`);
   }
@@ -1443,7 +1443,7 @@ export class YeguoSource extends QgSource {
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
       }
       const resp: QgHttpResponse = await QgHttp.request(address, isGet ? 'GET' : 'POST',
-        headers, body, YG_API_TIMEOUT_MS);
+        headers, body, YG_API_TIMEOUT_MS, 0, 30, this.id);
       if (resp.status < 200 || resp.status >= 300) {
         throw new Error(`野果接口请求失败：HTTP ${resp.status}`);
       }

@@ -3,7 +3,7 @@
  * 每个站源实现目录分页 / 搜索 / 详情 / 播放地址解析四个能力。
  * 剧集 ID 全局唯一："源ID:站内ID"。
  */
-import { QgCategory, QgDramaDetail, QgPageResult, QgPlayInfo } from '../../model/QgModels';
+import { QgCategory, QgDramaDetail, QgPageResult, QgPlayInfo, QgSeason } from '../../model/QgModels';
 
 export abstract class QgSource {
   readonly id: string = '';
@@ -19,6 +19,10 @@ export abstract class QgSource {
     return [];
   }
 
+  async loadCategories(): Promise<QgCategory[]> {
+    return this.categories();
+  }
+
   /** 目录分页（page 从 1 起） */
   async catalogPage(categoryId: string, page: number): Promise<QgPageResult> {
     return new QgPageResult([], false);
@@ -31,6 +35,10 @@ export abstract class QgSource {
 
   /** 剧集详情（含分集列表） */
   abstract detail(dramaId: string): Promise<QgDramaDetail>;
+
+  async seasons(dramaId: string): Promise<QgSeason[]> {
+    return [];
+  }
 
   /** 解析某分集的可播放地址 */
   abstract play(dramaId: string, episodeId: string): Promise<QgPlayInfo>;
@@ -52,6 +60,19 @@ export class QgSourceManager {
       }
     }
     QgSourceManager.list.push(source);
+  }
+
+  static replace(source: QgSource): void {
+    const index: number = QgSourceManager.list.findIndex((item: QgSource): boolean => item.id === source.id);
+    if (index >= 0) {
+      QgSourceManager.list[index] = source;
+    } else {
+      QgSourceManager.list.push(source);
+    }
+  }
+
+  static remove(id: string): void {
+    QgSourceManager.list = QgSourceManager.list.filter((item: QgSource): boolean => item.id !== id);
   }
 
   static all(): QgSource[] {

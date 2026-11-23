@@ -26,6 +26,8 @@ export class QgDrama {
   cover: string = '';
   /** 更新说明（如「更新至第30集」） */
   remark: string = '';
+  /** 站源提供的角标（如「听书 · 共 12 章」） */
+  badge: string = '';
 
   constructor(id: string, title: string, genre: string) {
     this.id = id;
@@ -42,12 +44,51 @@ export class QgEpisode {
   title: string = '';
   /** 第几集（1 起） */
   order: number = 1;
+  /** 音频分集（听书/广播剧，站源声明 mediaType=audio） */
+  audio: boolean = false;
 
   constructor(id: string, title: string, order: number) {
     this.id = id;
     this.title = title;
     this.order = order;
   }
+}
+
+/** 常见“第 N 集”式标题：纯数字或第/ep 前缀 + 数字（不区分大小写） */
+const RE_EPISODE_NUMBERED: RegExp = /^(第|ep|e)?\s*\d+\s*[集章话話回期节節]?$/i;
+
+/** 分集标题是否为有实际含义的章节名（非“第 N 集”模式） */
+export function qgEpisodeNamed(ep: QgEpisode): boolean {
+  const title: string = ep.title.trim();
+  return title.length > 0 && !RE_EPISODE_NUMBERED.test(title);
+}
+
+/** 分集展示名：有章节名用章节名，否则“第 N 集” */
+export function qgEpisodeLabel(ep: QgEpisode): string {
+  return qgEpisodeNamed(ep) ? ep.title.trim() : `第 ${ep.order} 集`;
+}
+
+/** 多数分集有命名标题时，列表按“命名模式”单列展示站源标题 */
+export function qgEpisodesNamed(episodes: QgEpisode[]): boolean {
+  if (episodes.length === 0) {
+    return false;
+  }
+  let named: number = 0;
+  for (let i = 0; i < episodes.length; i++) {
+    if (qgEpisodeNamed(episodes[i])) {
+      named++;
+    }
+  }
+  return named * 2 >= episodes.length;
+}
+
+/** 同一张图判断：去掉协议与签名参数后 host+path 相同（换签名地址不刷新封面） */
+export function qgSameImage(a: string, b: string): boolean {
+  const x: string = a.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.\-]*:\/\//, '')
+    .replace(/^\/\//, '').split('?')[0];
+  const y: string = b.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.\-]*:\/\//, '')
+    .replace(/^\/\//, '').split('?')[0];
+  return x.length > 0 && y.length > 0 && x.toLowerCase() === y.toLowerCase();
 }
 
 /** 详情结果：剧集完整信息 + 分集列表 */
@@ -58,6 +99,16 @@ export class QgDramaDetail {
   constructor(drama: QgDrama, episodes: QgEpisode[]) {
     this.drama = drama;
     this.episodes = episodes;
+  }
+}
+
+export class QgSeason {
+  number: number = 1;
+  drama: QgDrama;
+
+  constructor(number: number, drama: QgDrama) {
+    this.number = number;
+    this.drama = drama;
   }
 }
 
@@ -103,6 +154,8 @@ export class QgPlayInfo {
   qualities: number[] = [];
   /** 当前清晰度（0 未知） */
   quality: number = 0;
+  /** CENC 内容密钥 hex（32 字符；非空表示 url/routes 为加密 MP4，需网关解密播放） */
+  cencKey: string = '';
 }
 
 /** 观看记录 */
@@ -136,6 +189,36 @@ export class QgFollowRecord {
   sourceId: string = '';
 }
 
+/** 待看队列快照 */
+export class QgQueueRecord {
+  dramaId: string = '';
+  addedAt: number = 0;
+  title: string = '';
+  cover: string = '';
+  episodeCount: number = 0;
+  finished: boolean = true;
+  sourceId: string = '';
+}
+
+/** 播放片段书签 */
+export class QgBookmarkRecord {
+  dramaId: string = '';
+  title: string = '';
+  episode: number = 1;
+  seconds: number = 0;
+  createdAt: number = 0;
+}
+
+/** 单站源代理覆盖（设置 › 代理 按站源单独设置） */
+export class QgSourceProxy {
+  /** follow=跟随全局 | direct=直连 | manual=手动代理 */
+  mode: string = 'follow';
+  /** 手动代理主机 */
+  host: string = '';
+  /** 手动代理端口 */
+  port: number = 7890;
+}
+
 /** 应用设置 */
 export class QgAppSettings {
   /** 外观：跟随系统 | 浅色 | 深色 */
@@ -146,8 +229,12 @@ export class QgAppSettings {
   autoPlay: boolean = true;
   /** 播放：播完自动连播下一集 */
   autoNext: boolean = true;
+  /** 播放：点开剧集跳过详情页直接播放 */
+  directPlay: boolean = false;
   /** 播放：默认倍速 */
   playSpeed: number = 1;
+  /** 播放：画幅 original=原始（等比完整） | fill=全屏（拉伸铺满，非等比放大不裁字幕） */
+  videoAspect: string = 'original';
   /** 弹幕：播放页显示弹幕 */
   danmakuOn: boolean = true;
   /** 弹幕：不透明度 0-100 */
@@ -168,6 +255,12 @@ export class QgAppSettings {
   proxyHost: string = '';
   /** 网络：代理端口 */
   proxyPort: number = 7890;
+  /** 网络：按站源代理覆盖（key=站源ID，未设置的跟随全局） */
+  sourceProxies: Record<string, QgSourceProxy> = {};
+  /** 首页模块开关 */
+  homeContinue: boolean = true;
+  homeRank: boolean = true;
+  homeRecommendations: boolean = true;
 }
 
 /** 详情页路由参数 */
@@ -225,7 +318,7 @@ export class QgSourceGroupInfo {
 
 /** 全部 15 个站源（对照真果鉴 models.dart SourceSite） */
 export const QG_SOURCES: QgSourceDesc[] = [
-  qgSrc('hongguo', '红果', '短剧 · 漫剧 · AI 剧'),
+  qgSrc('hongguo', '红果', '短剧 · 漫剧 · AI 剧 · 听书'),
   qgSrc('hanxiaoquan', '韩小圈', '韩剧 · 韩国电影 · 综艺动漫'),
   qgSrc('guipian', '鬼片', '鬼片 · 电视剧 · 动漫'),
   qgSrc('sorani', '青空', '番剧 · 剧场动画 · 特摄'),

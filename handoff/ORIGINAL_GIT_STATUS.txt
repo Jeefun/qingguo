@@ -1,0 +1,259 @@
+ M .cache/.tsbuildinfo
+ M .cache/.tsbuildinfo.linter
+ M .gitignore
+ M AppScope/app.json5
+ M AppScope/resources/base/media/layered_image.json
+ M entry/build-profile.json5
+ M entry/oh-package.json5
+ M entry/src/main/ets/components/QgDanmaku.ets
+ M entry/src/main/ets/components/QgWidgets.ets
+ M entry/src/main/ets/data/QgCrypto.ets
+ M entry/src/main/ets/data/QgGateway.ets
+ M entry/src/main/ets/data/QgHttp.ets
+ M entry/src/main/ets/data/QgRepository.ets
+ M entry/src/main/ets/data/QgStore.ets
+ M entry/src/main/ets/data/source/HongguoSource.ets
+ M entry/src/main/ets/data/source/QgSource.ets
+ M entry/src/main/ets/entryability/EntryAbility.ets
+ M entry/src/main/ets/model/QgModels.ets
+ M entry/src/main/ets/pages/DetailPage.ets
+ M entry/src/main/ets/pages/HistoryPage.ets
+ M entry/src/main/ets/pages/Index.ets
+ M entry/src/main/ets/pages/PlayerPage.ets
+ M entry/src/main/ets/pages/SearchPage.ets
+ M entry/src/main/ets/pages/SettingsPage.ets
+ M entry/src/main/ets/tab/ExploreTab.ets
+ M entry/src/main/ets/tab/FollowTab.ets
+ M entry/src/main/ets/tab/MineTab.ets
+ M entry/src/main/module.json5
+ M entry/src/main/resources/base/element/color.json
+ M entry/src/main/resources/base/media/layered_image.json
+ M entry/src/main/resources/dark/element/color.json
+?? .cache/add-themes.cjs
+?? .cache/before-impeccable-redesign/
+?? .cache/campus-final-review/
+?? .cache/campus-site-migration-backup/
+?? .cache/capture-review.ps1
+?? .cache/check-redesign-scope.py
+?? .cache/design-contract.md
+?? .cache/design-options-r2.json
+?? .cache/design-options-r2.py
+?? .cache/design-options.json
+?? .cache/design-options.py
+?? .cache/design-sketches.py
+?? .cache/handoff-regression.log
+?? .cache/layout-text.py
+?? .cache/module-builder.txt
+?? .cache/module-engine-build/
+?? .cache/module-html-runtime/
+?? .cache/module-runtime-build.log
+?? .cache/module-runtime-build2.log
+?? .cache/module-runtime-build3.log
+?? .cache/module-runtime-build4.log
+?? .cache/module-runtime-build5.log
+?? .cache/module-runtime-final-build.log
+?? .cache/module-work/
+?? .cache/npm/
+?? .cache/online-module-build-final.log
+?? .cache/online-module-build.log
+?? .cache/online-module-build2.log
+?? .cache/online-module-build3.log
+?? .cache/online-module-build4.log
+?? .cache/online-module-build5.log
+?? .cache/online-module-build6.log
+?? .cache/online-review/
+?? .cache/patch.txt
+?? .cache/playback-device/
+?? .cache/playback-fix-build.log
+?? .cache/playback-nov17-build.log
+?? .cache/playback-nov17-build2.log
+?? .cache/qg-catalog-interface.txt
+?? .cache/qg-engine-interface.txt
+?? .cache/qg_after_click_now.jpeg
+?? .cache/qg_after_click_now.json
+?? .cache/qg_back_mine.jpeg
+?? .cache/qg_back_mine.json
+?? .cache/qg_before_redesign.jpeg
+?? .cache/qg_check_lock.jpeg
+?? .cache/qg_current.jpeg
+?? .cache/qg_current.json
+?? .cache/qg_danmaku_fixed.jpeg
+?? .cache/qg_danmaku_issue.jpeg
+?? .cache/qg_danmaku_issue2.jpeg
+?? .cache/qg_danmaku_offscreen.jpeg
+?? .cache/qg_danmaku_play.jpeg
+?? .cache/qg_danmaku_smooth.jpeg
+?? .cache/qg_design_home.json
+?? .cache/qg_detail_smoke.jpeg
+?? .cache/qg_final_home.jpeg
+?? .cache/qg_final_installed.jpeg
+?? .cache/qg_fixed_cancel.jpeg
+?? .cache/qg_fixed_modal.jpeg
+?? .cache/qg_follow_now.jpeg
+?? .cache/qg_follow_recheck.jpeg
+?? .cache/qg_follow_recheck2.jpeg
+?? .cache/qg_fullscreen.jpeg
+?? .cache/qg_fullscreen.json
+?? .cache/qg_fullscreen_click.jpeg
+?? .cache/qg_fullscreen_click.json
+?? .cache/qg_fullscreen_exit.jpeg
+?? .cache/qg_fullscreen_exit.json
+?? .cache/qg_fullscreen_now.jpeg
+?? .cache/qg_fullscreen_now.json
+?? .cache/qg_fullscreen_now2.jpeg
+?? .cache/qg_fullscreen_test.jpeg
+?? .cache/qg_fullscreen_test.json
+?? .cache/qg_global_scroll_before.jpeg
+?? .cache/qg_green_home.jpeg
+?? .cache/qg_home.jpeg
+?? .cache/qg_home_scrolled_latest.jpeg
+?? .cache/qg_installtest.jpeg
+?? .cache/qg_installtest.json
+?? .cache/qg_installtest2.json
+?? .cache/qg_latest_home.jpeg
+?? .cache/qg_latest_home.json
+?? .cache/qg_latest_scroll.jpeg
+?? .cache/qg_latest_scroll_idle.jpeg
+?? .cache/qg_layout.json
+?? .cache/qg_locked.jpeg
+?? .cache/qg_mine_now.jpeg
+?? .cache/qg_mine_recheck.jpeg
+?? .cache/qg_mine_store.jpeg
+?? .cache/qg_mine_store.json
+?? .cache/qg_now.jpeg
+?? .cache/qg_online_store.jpeg
+?? .cache/qg_play.json
+?? .cache/qg_player.json
+?? .cache/qg_player_controls.jpeg
+?? .cache/qg_player_controls.json
+?? .cache/qg_player_now.jpeg
+?? .cache/qg_player_now.json
+?? .cache/qg_player_smoke.jpeg
+?? .cache/qg_player_stage.jpeg
+?? .cache/qg_player_stage.json
+?? .cache/qg_recheck.jpeg
+?? .cache/qg_relaunch.jpeg
+?? .cache/qg_relaunch_idle.jpeg
+?? .cache/qg_restored.jpeg
+?? .cache/qg_scroll_mid.jpeg
+?? .cache/qg_scrolled.jpeg
+?? .cache/qg_search_now.jpeg
+?? .cache/qg_select.jpeg
+?? .cache/qg_set.json
+?? .cache/qg_setafter.json
+?? .cache/qg_setmore.json
+?? .cache/qg_settings_now.jpeg
+?? .cache/qg_settings_refresh.jpeg
+?? .cache/qg_settings_refresh.json
+?? .cache/qg_smoke_after_card.jpeg
+?? .cache/qg_smoke_controls.jpeg
+?? .cache/qg_smoke_controls_crop.png
+?? .cache/qg_smoke_controls_crop2.png
+?? .cache/qg_smoke_exit.jpeg
+?? .cache/qg_smoke_fullscreen.jpeg
+?? .cache/qg_smoke_fullscreen2.jpeg
+?? .cache/qg_smoke_fullscreen3.jpeg
+?? .cache/qg_smoke_fullscreen_ok.jpeg
+?? .cache/qg_smoke_home.jpeg
+?? .cache/qg_smoke_layout.json
+?? .cache/qg_smoke_layout2.json
+?? .cache/qg_smoke_player.jpeg
+?? .cache/qg_smoke_player_layout.json
+?? .cache/qg_source_cancel.jpeg
+?? .cache/qg_source_pwd.jpeg
+?? .cache/qg_start_now.jpeg
+?? .cache/qg_store_final.json
+?? .cache/qg_store_final2.json
+?? .cache/qg_store_home.jpeg
+?? .cache/qg_store_home.json
+?? .cache/qg_store_recheck.jpeg
+?? .cache/qg_store_recheck.json
+?? .cache/qg_switch_success.jpeg
+?? .cache/qg_unlock.jpeg
+?? .cache/qg_unlock2.jpeg
+?? .cache/qg_unlock3.jpeg
+?? .cache/qg_user_screen.jpeg
+?? .cache/qg_v2_clear_glass.jpeg
+?? .cache/qg_v2_det.jpeg
+?? .cache/qg_v2_detail.jpeg
+?? .cache/qg_v2_follow.jpeg
+?? .cache/qg_v2_glass_home.jpeg
+?? .cache/qg_v2_glass_scroll.jpeg
+?? .cache/qg_v2_home.jpeg
+?? .cache/qg_v2_home2.jpeg
+?? .cache/qg_v2_home_scroll.jpeg
+?? .cache/qg_v2_liquid.jpeg
+?? .cache/qg_v2_mine.jpeg
+?? .cache/qg_v2_play.jpeg
+?? .cache/qg_v2_player.jpeg
+?? .cache/qg_v2_set.jpeg
+?? .cache/qg_v2_set_dark.jpeg
+?? .cache/qg_v2_settings.jpeg
+?? .cache/qg_wake.jpeg
+?? .cache/qingguo_after_refactor.jpeg
+?? .cache/qingguo_current.jpeg
+?? .cache/qingguo_detail.jpeg
+?? .cache/qingguo_final.jpeg
+?? .cache/qingguo_follow.jpeg
+?? .cache/qingguo_follow_fixed.jpeg
+?? .cache/qingguo_mine_refactor.jpeg
+?? .cache/redesign-build.log
+?? .cache/redesign-build2.log
+?? .cache/redesign-build3.log
+?? .cache/redesign-build4.log
+?? .cache/redesign-build5.log
+?? .cache/redesign-build6.log
+?? .cache/redesign-build7.log
+?? .cache/redesign-build8.log
+?? .cache/redesign-build9.log
+?? .cache/redesign_aux.py
+?? .cache/redesign_pages.py
+?? .cache/redesign_player.py
+?? .cache/redesign_ui.py
+?? .cache/run-campus-final-review.cjs
+?? .cache/seasons-build-final.log
+?? .cache/seasons-build-release.log
+?? .cache/seasons-build.log
+?? .cache/store.diff
+?? .cache/theme-refine.cjs
+?? .cache/theme-review/
+?? .cache/theme-settings.cjs
+?? .cache/themes-build.log
+?? .cache/themes-final-build.log
+?? .cache/themes-final2-build.log
+?? .cache/transfer-20261120-v2/
+?? .cache/transfer-20261120-v3/
+?? .cache/upstream-20261120-index.json
+?? .cache/upstream-check/
+?? .impeccable/
+?? AGENTS.md
+?? AppScope/resources/base/media/qg_icon_background.svg
+?? AppScope/resources/base/media/qg_icon_foreground.svg
+?? DESIGN.md
+?? PRODUCT.md
+?? README-MIGRATION.md
+?? campus-style-lab/
+?? dist/
+?? entry/oh-package-lock.json5
+?? entry/src/main/cpp/
+?? entry/src/main/ets/components/QgTheme.ets
+?? entry/src/main/ets/data/QgCencTask.ets
+?? entry/src/main/ets/data/QgModuleHost.ets
+?? entry/src/main/ets/data/QgModuleHtml.LICENSE
+?? entry/src/main/ets/data/QgModuleHtml.d.ts
+?? entry/src/main/ets/data/QgModuleHtml.js
+?? entry/src/main/ets/data/QgModuleStore.ets
+?? entry/src/main/ets/data/QgMp4Cenc.ets
+?? entry/src/main/ets/data/QgVersion.ets
+?? entry/src/main/ets/data/source/HongguoPlaybackV5.LICENSE
+?? entry/src/main/ets/data/source/HongguoPlaybackV5.d.ts
+?? entry/src/main/ets/data/source/HongguoPlaybackV5.js
+?? entry/src/main/ets/data/source/QgModuleSource.ets
+?? entry/src/main/resources/base/media/qg_icon_background.svg
+?? entry/src/main/resources/base/media/qg_icon_foreground.svg
+?? entry/src/main/resources/base/media/qg_start.svg
+?? entry/src/main/resources/base/profile/network_config.json
+?? handoff/
+?? scripts/
+?? 全屏解决办法社区回复版本.md
+?? 热烈欢迎邱耀德教授莅临我校.pptx

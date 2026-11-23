@@ -964,7 +964,7 @@ export class JinguoSource extends QgSource {
       throw new Error('播放列表地址无效');
     }
     const resp: QgHttpResponse =
-      await QgHttp.request(address, 'GET', jgMediaHeaders(referer), null, JG_MEDIA_TIMEOUT_MS);
+      await QgHttp.request(address, 'GET', jgMediaHeaders(referer), null, JG_MEDIA_TIMEOUT_MS, 0, 30, this.id);
     if (resp.data.length > JG_PLAYLIST_MAX_BYTES) {
       throw new Error('播放列表过大或读取失败');
     }
@@ -1128,7 +1128,7 @@ export class JinguoSource extends QgSource {
     headers['User-Agent'] = JG_UA;
     let resp: QgHttpResponse;
     try {
-      resp = await QgHttp.request(base + route, method, headers, body, JG_TIMEOUT_MS);
+      resp = await QgHttp.request(base + route, method, headers, body, JG_TIMEOUT_MS, 0, 30, 'jinguo');
     } catch (error) {
       const err: Error = error as Error;
       throw new JgLineError(`禁果连接失败：${err.message}`);

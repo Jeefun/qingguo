@@ -313,7 +313,7 @@ export class HuangdouSource extends QgSource {
       'sign': sign
     };
     const url: string = `${this.host.replace(/\/+$/, '')}/api${path}`;
-    const resp = await QgHttp.request(url, 'POST', headers, body, timeoutMs);
+    const resp = await QgHttp.request(url, 'POST', headers, body, timeoutMs, 0, 30, this.id);
     if (resp.status < 200 || resp.status >= 300) {
       throw new Error(`黄豆 HTTP ${resp.status}: ${resp.text().substring(0, 200)}`);
     }
@@ -552,7 +552,7 @@ export class HuangdouSource extends QgSource {
     if (media.length === 0) {
       const fallback: string = `${this.host}/api/drama/hls/${encodeURIComponent(sourceId)}/${seq}/play.m3u8?line=free`;
       const playlist: string = await QgHttp.getText(fallback,
-        { 'User-Agent': UA, 'Referer': `${this.host}/home` }, ATTEMPT_TIMEOUT);
+        { 'User-Agent': UA, 'Referer': `${this.host}/home` }, ATTEMPT_TIMEOUT, this.id);
       if (!playlist.trim().startsWith('#EXTM3U')) {
         throw new Error('黄豆未提供有效的播放地址，备用播放列表也不可用');
       }

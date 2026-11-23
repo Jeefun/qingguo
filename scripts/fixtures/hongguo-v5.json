@@ -1,0 +1,278 @@
+[
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": "{\"mixed_video_id_map\":{\"1004\":[\"1234567890123456789\"]},\"device_level\":1}",
+    "now": 1794870000000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870000005&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870000",
+        "X-Helios": "AAECA3M93rykfCgJsvH4h/k6YPil71BYsp3J36XftUuWs5HI",
+        "X-Medusa": "9Yr7at3BtKC5//Ypzz9VRtLnNzwaGwABxYo+FyAhgYoOGERjYqu+HM366M454xa5UNDF2UYLic3gA8zoVhLg6ti+Hqt2qrTFVuqSzBqnfMewrNyqyop69KstJP77e2z87NP81sOb62hQGAIXlg14iZpooiKypKfwma0pC3SS8PqLuIrN2hg72M66h6kY1sVzZOmEZaKpRu6MyGvnvpKVRl//KvGc9ada8gpuJ9AKh4R5Pchjui6rXx+ygEkfClnHL/tYXZ6YpUhj1ipJWtcxt/Xg8wLoO1LT5Ji9FdAwktandeeCp/beGIkqV2IvGoPsuquFH1zVQKEob6lVoOt1VSPMUNQNimsRu7H2PeMf98oHp8vtp35vvDFtt3w7ggmRFm99nd/R//+I+DaJZjHK031IHFvztOBs4M8BCpiiNEgalFXXDPE7DDroz0WzpvfkNt/peLQftgCewTgwhJObVu/+ZEQ4hVeepq+a7fTqWLulD/65yT8gNs1OMqARMfNLhp4xI6Ozx2eTUXm66mu56dnzkERXpr+Dpx6gnfEcr4KYcvmefo6unkkiNo/Lr2wd0SX6J8LiMUZC+w/eH8qLFRaewlKKXNYSbLpR4aYyxX823vG5MW6kuzph6d1teEAZkIHFEGYH6yD+/v//H/7//x8cHQ==",
+        "X-SS-STUB": "D997FAD56732DBCADB2E0AD6DF550B85",
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": null,
+    "now": 1794870001000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870001010&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870001",
+        "X-Helios": "IiMkJdVUhfa8Fi3LTVLSRxljfBJNuw/qkTVWJjPl3rQPeO9P",
+        "X-Medusa": "9Ir7atzBtKC4//Ypzj9VRtPnNzwqKwABMcoOJzAxAWACWGhC8IbN/JoliT95FevD+dKHrbcASg2CpaFtakYs+b89hmW09aDkYPFGHSgbz4iLNUJzJi59AAXHJCnVmwfFoHEuDWd9BsxuAsf/NEyS5ByAGMpHEznZ4PyiamrdWoJhbL/e8p7fq7MTYqMVBFh8EhDOA/rdpep8yALcQ7z38QJe5+bGpe7csmIyypRtPED6nekTdxZ5sbC+Vw1IzKq/sXjZMKwbFhhAjpdSd++jJ0L4nAZVXyr2Sw98/XCcP24w1MrGeC8dDDDeMXpqGEAPLAtFzk5mmQCKkr3nleDGOuhyE44eDJrPA0nGY/EsTlL1P16lRl5B6U1gzxZcgySjFPAZmZNj9F7YUsvksPIil98cR86GNDM3S5KazsN0/7w0msrLNUhlY6/4hSU/xgBedoyqcmgCxPKdtpqi4p3BRk8K3WbltIUyeWKi9SigdiR1K3SMGp44c91Qdl+iP3q9a5haHY9xRX2uZ7wza18fECgYpCp0bAR8TZ8S5WHE12VHJP/SzthyB/U9gGSCKOPQjo8ZKI90pnXqYr7GaQHh69OloO/G+aVAX7CU9ySseSjCX1CRXsmgqSLMQvi/ZbzduMmmVeH0wSoF///+n////p8sLQ=="
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": "{\"mixed_video_id_map\":{\"1004\":[\"1234567890123456789\"]},\"device_level\":1}",
+    "now": 1794870002000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870002014&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870002",
+        "X-Helios": "MjM0NUiGgIgHeJEW8CY8Jh2/Evu5NXeGUlLCdXBctEaUHGCA",
+        "X-Medusa": "94r7at/BtKC7//YpzT9VRtDnNzw6OwABFsoeP0BFgWsIGOFn7vxWT+MYeyorDuTWdcA0vO5EnbkE/HGAyQl1bvoXN799YWJV3AoVpkrCzLZTzMJcO35DdFEcOOycq1vgR6SKNqeduG0eD1BnZ4l/qCBeYw2IaV1xtnsmQYs9QJ1UBV0h05tC57dMTSMCa3DSNQawO/rieqnDV9XTaRScwBrqdNTwm3EBpZP5Juyw2r9FiYf7LoDbyR00k3Qj25mD9JtuV6B8siWnmYYXmAAixQ8JAErPv808vSdAYzzaA39UI7hmwNiqV1rXnZeVwVGfR0PFiStLJV+cSvH0FaY0d8qB6WdIZn/wxem/m/5Kkh8s5z2PpRNUUSwwnNerUn2v2/04LCucBjVzMT8t24txdbne8q0eOqs9zy9MFZfESyD+JQL7qKKDbSE1njGqtLcZtu42vHbcgxVfHqN0iDJAhibB6A2ZxMy46inM9N5B+Hh/Usg4t94ujG5bDRM3ANLAmk2FL/86RTGSmcIK2Psh2hmyIj2bTEYdbvh1/m4sl8ZL6iqvB3uKE+4CNTzoLnnDDa8y2tS6g2pcVhA+8PjXaCEWLYpiYt0rtXmilg3f+6aR+ottruVBdtr/wZ/r4TROH+bVopPr/WEf///+H////h88PQ==",
+        "X-SS-STUB": "D997FAD56732DBCADB2E0AD6DF550B85",
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": null,
+    "now": 1794870003000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870003002&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870003",
+        "X-Helios": "QkNERUu9DuPKaoynE1Peqq0eIow8Dmnyb60mOpA919/8XwS+",
+        "X-Medusa": "9or7at7BtKC6//YpzD9VRtHnNzxKSwABIYpuR0BVAT8AWOv/JK+iOX0C6f0M5wmf+h0HnCljaJQ9+gCsG73VpIbQZ6jWnjd7VN4uZlxFX3AftIuWGbxyijLj7nwD3nQA7x/U6dzupRFdzZ3486c97xioAAGcRAVJ0saXbw7KzxEHXxdPaQkh7kVUFmlIFrI66soZkd6JkuRy4ZRck5Kktt5cjPt3IsiLi7ghOODqTUL8PCnLvjhzycM0z79K5NhRdkMwVP0sZoH7e6K92n9KxvRxEknwxptGQNxiUfI/pTJXoBqVwHhe1MIaEvwuJnQv1i1/ASzAX48Rll/cMZxSASg4wT/LOUHlGroLpMC1CnAkqFS44ssogg7A0ZilmJamGIQO/eCAGDXVSrZVgnhaUBsk/h2OXWGFnkGRp9pv5iLfeqLwAUlZYkXX286Rr6fbDrGfhA+St3s0tdPJsNkrL5DDaNyGvP7WwTJpdYbxdGVHMKqcg7aYWHYn7qOqIWQog3vbFENJy7CouyebsD4qBKSVcGvgInxSnk4PyrR35sJaOupIY8o8PBmwbKTy113P2VkAThlr29SNxaPr0GuKzZXosIywX8c/9VX1u674wNeR5Ye3dTLXrnLIqlGlCr6tVOG8dRufs1ik/P/9n/z//Z9MTQ=="
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": "{\"mixed_video_id_map\":{\"1004\":[\"1234567890123456789\"]},\"device_level\":1}",
+    "now": 1794870004000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870004018&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870004",
+        "X-Helios": "UlNUVchC6Gv7P14aqiKrBzI4ZXPXmxi++E0IEO+EUBe0b9St",
+        "X-Medusa": "8Yr7atnBtKC9//Ypyz9VRtbnNzxaWwABGspeX3BhgUYMWEblznIoDNVNODrAZ5/p2xtyGi+D8l5azDnIRBDaa1Pe+kCXuvMDM7Ampgl351t750z+vpe6X6sjTJbwmQQ2NVhPjnJMIFfT8od0+MEIjtyAdwl6Nzd5dRhQ+zbWPHDZNGrrZ1lG477viCbH6Qn+lUyJ21qeg6XfsvvyEtc8pqeS6s7xjDcJSnu+XXnlTVHOUfiqeJLP8mej0YFEWug4P2eXj2uDpup2/zMtVKkB8iEEU1Ys74RbMSW+MnofkSdWkt8eu/fGrWcjyr3sCdThej4HUSaW8Fo6ta3r87GkY2H7s24zE9HxSwVQdMNCCcEkMuDdVZy6p6ol06vvTVcbY+KlyFmMq74HJTRI/k618/IogksT1cc2sNCa/5TrF+PxfzvFrBwoUBjlSsI2+S9ndiHONw2SX0JkCQN9VVp2orZYKzDYHM/97ugri/KmNPSgDfkflxErDFqr39iLp905n9OFFzQVTy7dwFoOMNaKW/nN8HnAC4+0r2yWal6i1URISQo8kIIEb8iVeaLtB//ANk5sejxRHh4pQIRvLV5lXemOnIRGZl8wAJpD1QnZddMHegaOn9Dfsqt1udsZS4FP/ylMBCezhf/T/P/9H/z//R9cXQ==",
+        "X-SS-STUB": "D997FAD56732DBCADB2E0AD6DF550B85",
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": null,
+    "now": 1794870005000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870005004&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870005",
+        "X-Helios": "YmNkZUETtjjI/dKlWDodWYL+Dv+1oXUVDNnxKeNZU8+UV735",
+        "X-Medusa": "8Ir7atjBtKC8//Ypyj9VRtfnNzxqawABRYpOZ3B1gX8DGPIsnims64EsYisSV7q+dNV8/Zlb7HhhiWsN3ERCNWpNs/3Rw9BZkgFUjdDSxymxuctgL8UnwwIG4iD9B0+w7RskZJTFeFw9QppCZlMQeC1TdSL5QC3ic8w2juO/RD5F7gpRvAnTL/2tMFFWrk7BWhVOg6k1iVIKO21KjhG5s1ThbUPnwKxlpBIn92WMkogxdgQENbhRgKpzh8cYdpdDa6bzy99mRjYr6tqxz+E1NRoz3N6dog806x40qAzp5gZqMdkiXnvBmZMYI0mQvkc6cNNDZGd/UPIBaGWGbACQQSLpI2G/ugbeZaCok/rbynSIK9UkeR3Eq/eECyOXBiu1x8fc9XtK7SqkQpRdkBBrUWhkkcCKFLZm+CQUsPDFYTQ4/yv4oZcLXMo9fiZbLl0NFt4WSYAElJwYqzbjvocv956KcmwdBoqFa9rT4YVvOZdpw41jUls6QByP8Ph/vPtpapWyXmcK+I5enk0HNTDaf3ta4sMzHrD+0wfOKqiF5NCU+kJ8vui/gLcVLfnHX6WAp8OWc2Jtnw5Txb4UOocmpB6onIHMDTASOTMViW+Kg0UEKr/QIjOTDV89S+nsJnX/s12/kgLMo3tU/f/8n/3//J9sbQ=="
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": "{\"mixed_video_id_map\":{\"1004\":[\"1234567890123456789\"]},\"device_level\":1}",
+    "now": 1794870006000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870006016&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870006",
+        "X-Helios": "cnN0dRNsWL9mbppfG7MKVHXg8ZspGBDSoq5I+V0Tvt/daSxM",
+        "X-Medusa": "84r7atvBtKC///YpyT9VRtTnNzx6ewAB0opef5CFAXIHGBFx9XD/OOPa8YS859U/hducXX1HzOUfTlyGnnLF44hcmSK7Jc3hGd+bnYHjySQP53y3Lu8/nVgumnJNJTaNSjWUO9DnrQqEL6sQr/LQF1QHYa8jkPV+HRF37T3T/fQpj69pAr8sFoxLqqLlJRf8RpwyTDOjB4gLrVpDcjUx02lc+MjFJwFsSyVO6fy+bDjhsMSQwt4uOr7x/SfLP+IHsZRbSWF7UUH5HdT56Y8IDXhQpEKHfqOJlHw33kQbbXjA1inzJgtexTFtyLZs+9Frppoqc47CIBKkfYEyn/IAAXP9nbwlwMt+omofqH7WfnYc8Txtbu62E3YIkSvjGkN6FbQUsBeDCzpASY+gPq1sZJQIgRDOk5rmSP0hJM1ll/MC19+DOAVWNKZKbkHq6Ri+sMRLiUHRZ0Lf3y2nV57MonUcbdF1OseXPI7NxexjdqV1zSzQsHyVwTkL1FFAy7G8zBFb9puj1fiCJu+KpSuidbU+AuR4za/D5+/0syj949DFUMW63yu4oWc8+TCvMmrTJDIHoi0kRiONgoeCXQdBr2sG57jwhozU8yd+YnE2pHzAWad1gabYcoluvqGh48o3rJE9Fmo2RMET/f/8H/3//B98fQ==",
+        "X-SS-STUB": "D997FAD56732DBCADB2E0AD6DF550B85",
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": null,
+    "now": 1794870007000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870007006&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870007",
+        "X-Helios": "goOEhVxKzvpTgan5FvwZGQjvTBH0paxyO9Lw00dldYV34O8C",
+        "X-Medusa": "8or7atrBtKC+//YpyD9VRtXnNzyKiwABw4qOh4CVgQMNWHDmjjDf9DU/2tueDN+zxmqtsZpIWuKripdsLcf6f75w+HKXDUW5UtC9D/DADBPXLcrX+lllO5NvR79VoL8xpxRDZbgwzLw1iyU0C6e3GT+NYRBJ4EVX5JUKYiO5kaBH5C+PKuLVd5/LBaTRbEH5RmZsFX9M5Ul/jNE4gv07PYtkElyrYVLoWWbjg9dttni9fquwqElcGQNw4WqqddMsOYLUhH1jRRJniFDXBfZ2zuvf7DWtEdv1Hi8Ob8cFbUpux+v2C14Q4aD8KT04bsaxei7LvBAJ75KCLTsDl3PGaszsZRYrXugl9JH3WqqjKsBSdXjKVnf5D8WDRRUprE3p9iwK5TKPxXFVtGajZijTaCg3lw/L6O30OLVKgyhFksheErZ0JVsMtTYR/S253J1xg8XnIzen2/WvnbAMYLUr5b3zyVOGCOTs+A+WpQ+cyfVhA99x2c6UjPJtlaUVXzcrGiI7uAI8RZ6hl5rSs+YrDkcSDqE3P/z+Aqi6cy1VEiRj28AOqFWXgoGQ1+Wk/7hfboatrsiGGVPxH9h+dPIwDLJGpR40ir91AUp8br6EfVgYjloY+MhdBC+a+Fd5kxDOL8lDCu9+KLnk+v/7n/r/+5+MjQ=="
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": "{\"mixed_video_id_map\":{\"1004\":[\"1234567890123456789\"]},\"device_level\":1}",
+    "now": 1794870008000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870008015&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870008",
+        "X-Helios": "kpOUlToqrXEQB7HMyO7mpOqK58J0T5U7zIvJLE+W9N20MtDb",
+        "X-Medusa": "/Yr7atXBtKCx//Ypxz9VRtrnNzyamwABaMq+n7ChgfIPGLyOZVzWZT21cm4fUees+z/4+Am2+qzSNj5LgFT7FZS8QNOmlWtZirve2QU0S4iEiX8j/KC7i4mub1OA82xl17FKu8sULdzT0XWe0EgrdYQHaMRaQ8t1GzydjNc2HHSdhtOEMLA6r64zNSzHy9MbKOQRqwi8Sp2Ithhp7XyqoffUbYyqFF0CvvHKB/kth1ohr8zFOXNbQJ9YPUejT84pbYr/O38InVB83v+C6DMK1dRjMPGzVB6N2R4k+zUEu/TnIb06lVx/5R6QiRZ9suIRby4wbFFwaaS1UXuODwNA4+XxB7qI8IbBYgGB7efuLTqyIuaE2iFbz8lzuq2rTTaGjgIFsPcbNx1KxP6GSaEBZOtxCqu3igQ0GA/FZ2SqxtZ6iRqRYkTamRP0j/r3ede/hb4Oe3DF7hEs5aS3VQceLeOdIgBXueV4ZR9jLSr4LAsieyNwg0pLW3MJOyZFt2EGBW+iZVEHa493Ep5fuZMkyr5dcVZXV0K84B6/2OkXrpD2S30qqNNN1aHQhbm0YroVVr0aD5INnfGgg+nqYQ2Gu2JQm9Pu5KDe+39B3R77jG1ooxOIYdsIqs86L5+g3GslW2Kq7w19w7ZG+v/7H/r/+x+cnQ==",
+        "X-SS-STUB": "D997FAD56732DBCADB2E0AD6DF550B85",
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": null,
+    "now": 1794870009000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870009040&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870009",
+        "X-Helios": "oqOkpZZmHFCNMchjt868/wyRYySsSnJuNm5YU6rAPaN/Y2OD",
+        "X-Medusa": "/Ir7atTBtKCw//Ypxj9VRtvnNzyqqwABisqur7CxgVILGFd9eC0UrGDbd4FSxiax7hBLA4qvbXDhGH5vW3HtsxfohLNoEWPqXPz1frZobkrfeWFSKvH7f0eeCadmSKWicnv16eWdA0/MxosWuT9tV5XJ8q7Wzz2TjGoqTB+AyH2tGK1PxxpPFMwrbIPUqh8RfbQOaA/1gDgNYwTcewCkhQrhv7ALzVEKgTaqE3dXsIhQOXazplboWx0dq4OkreLZi3mhBC/4wk7eK/AR7I4R7E2wyByF+iQJU6IoITaquSFiuOwrB+etVM0JraIjkjCdgMcL+PltPxMdQc7ekfmTeqU+lU6mxfegGxcAyvTnupOpgTDe84hLyBYyB7B9dMPGOVUMojkbVR6VpRLz75dc5ePQ8Dak4bDbfLcNHKzpLnyin0P48+9uQQJoJfBtO1VAAfW7Up5VEGOM4mZXrZ1/Fdy42EEr1bfvQu1qNqq1QIxHd5HkSmgrtaeRU6A6RDUhmxQf8vt/tvGUvdtlPIv9efEsqTKb0o9VnTDGdm8Z3mNEgfBR3/2vFabas6FlSC5F9VavLhWC2luPdMCHjXHf47KwOi1CT79etxtkyZlX4pu2czKgH7BbJtuAlB+YAUf3YCGyYWC0CcC8+//6n/v/+p+srQ=="
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": "{\"mixed_video_id_map\":{\"1004\":[\"1234567890123456789\"]},\"device_level\":1}",
+    "now": 1794870010000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870010024&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870010",
+        "X-Helios": "srO0tah7kaDuh5UfuCfnWmoEMB1sZGGliilgwB4ImoEudNf7",
+        "X-Medusa": "/4r7atfBtKCz//YpxT9VRtjnNzy6uwABwYq+v9DFAT4OWNVagOpHgYr+6XsRR/A2VwxvqEliiajd9AAHFGmF1Bqv3ay0g0I1X6mBB3exmO5TsSl+RbhHaYGi0Ze6wHBKKRovvnKFi333O+Rqd6+kn9LBNZfokVRCtxWjQgLLfY82W2o3nFbWFge592qxHzqLLjiFI1N1sJmGNgUYLNd7mTnUEV+A7E65urL5ixSztlhmJ/k1il4wz8fN6/84oG/qtjmkz/ZvzJ1YdaY3TVMTNUIQICSS7KPlGgYBO+IhEqcP2i71HF4NaOdc64cLQ2qulb+KD0RDVKQDiidFWAFSagf5eILaqEEqdmNZh+LHwJAd5Nta9R+gToFLx00VR0UvOle57/hssGaiUTKQYy52P7GlUosFGSeFq9kw2KcXb35z8CxAkZkWRtBcsaoBiwtoRJnuTQtzJTq7yyLeMBLyJlCiqAn/CukyvD6rXQQL/plLwfd3pixWnOcUi59xd3IGJRMd3OsA4OzoKrDisCvhY78JUrzLcN6Hc5sYdbut7AC3uEsxrgny/SBr2YqVz2VeruqS/eHHuwm85MiVU+oesIv+k7n7UA8Gh8guRHGay983CQ3t2GbNAuqfx7bQCaa2gYULvvqXUieL+//6H/v/+h+8vQ==",
+        "X-SS-STUB": "D997FAD56732DBCADB2E0AD6DF550B85",
+        "Content-Type": "application/json; charset=utf-8"
+      }
+    }
+  },
+  {
+    "values": {
+      "aid": "8662",
+      "device_id": "1234567890123456789",
+      "iid": "2234567890123456789",
+      "version_name": "7.4.3.32",
+      "os_version": "12",
+      "device_type": "PGT-AN10",
+      "channel": "vivo_8662_64",
+      "cdid": "fixed-test"
+    },
+    "body": null,
+    "now": 1794870011000,
+    "expected": {
+      "url": "https://example.test/player?_rticket=1794870011001&aid=8662&cdid=fixed-test&channel=vivo_8662_64&device_id=1234567890123456789&device_type=PGT-AN10&iid=2234567890123456789&os_version=12&version_name=7.4.3.32",
+      "headers": {
+        "X-Khronos": "1794870011",
+        "X-Helios": "wsPExbhdgadHLZFtuLrfob/UWxU9tmG8wO61OMi7kPt688EL",
+        "X-Medusa": "/or7atbBtKCy//YpxD9VRtnnNzzKywABhMruz8DVgRsPWM/8I5opkr4AARnHjuY/VMc6fdfVbeoS3ocCQX5FP3yTjlB3MlIqsrHOE+ozw5I+QtcRTAGjYQVC2xz5r51yEd0IU5lky7C5RFhH4NhTMeyU9BOzgVrI/HGdz7yCs2RI+amqLDEPEJYvUZBJeWaxDQvkqWTruakvTceO4lGCm9KXvaJjSmnbAMSm3TzYINtwgsy39N1C+0+Fq9gUoyzlJrKSb99DaXGmJm9RtZb4vhN9uaJ4FkTCx+MLzOK9s1IpYJjuFabf0qSmvZxUrwabZE1F0sBYd7zkxwdznEDLiWH1ARjazrn/umKoAdItAFQBusyPj07X2tedPykzqx0PWzzLBnePeT2Hm6FTOU3SYwxQiMNZy0CQA+HDdouckhDipjfhxafdcr/9N3DwqbSDi/iOPiMoyPiz90XIdjmrjVmhYWl6+7kf/FlAqDoFXmaxkQM0ktQ4XeaZhjQDba7wg37YBg9K5YZzWDDvF6SPrUjc7311VwOktcr6vHhRk21OupbOX5oyfjkkYtHrnhBCxEWD7SVcTi/vLokWwRZSyENS8JWgRj//Yb69+cA/KEOfNOzk6kXZi2E6qUqnWeLeJUw5VzaeGFqw+P/5n/j/+Z/MzQ=="
+      }
+    }
+  }
+]

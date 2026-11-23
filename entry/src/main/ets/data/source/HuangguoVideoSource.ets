@@ -1053,7 +1053,7 @@ export class HuangguoVideoSource extends QgSource {
       };
       let resp: QgHttpResponse;
       try {
-        resp = await QgHttp.request(rawURL, 'GET', headers, null, HGV_TIMEOUT_MS);
+        resp = await QgHttp.request(rawURL, 'GET', headers, null, HGV_TIMEOUT_MS, 0, 30, this.id);
       } catch (error) {
         lastError = error as Error;
         continue;

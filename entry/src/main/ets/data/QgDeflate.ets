@@ -29,6 +29,7 @@ class QgInflateState {
   outLen: number = 0;
   bitBuf: number = 0;
   bitCnt: number = 0;
+  maxOut: number = Number.MAX_SAFE_INTEGER;
 
   constructor(input: Uint8Array, start: number, initCap: number) {
     this.input = input;
@@ -47,6 +48,9 @@ class QgInflateState {
   }
 
   put(b: number): void {
+    if (this.outLen >= this.maxOut) {
+      throw new Error('deflate: 解压输出超出限制');
+    }
     if (this.outLen + 1 > this.out.length) {
       this.grow(1);
     }
@@ -54,6 +58,9 @@ class QgInflateState {
   }
 
   ensure(extra: number): void {
+    if (this.outLen + extra > this.maxOut) {
+      throw new Error('deflate: 解压输出超出限制');
+    }
     if (this.outLen + extra > this.out.length) {
       this.grow(extra);
     }
@@ -327,13 +334,15 @@ export function qgInflateRaw(input: Uint8Array, start: number): Uint8Array {
 
 /**
  * 解压 gzip。支持多成员；若开头不是 gzip 魔数则原样返回（便于「明文/压缩」两态兼容）。
+ * maxBytes > 0 时限制解压总输出，超出抛错（防压缩炸弹）。
  */
-export function qgGunzip(input: Uint8Array): Uint8Array {
+export function qgGunzip(input: Uint8Array, maxBytes: number = 0): Uint8Array {
   if (input.length < 2 || input[0] !== 0x1f || input[1] !== 0x8b) {
     return input;
   }
   const outs: Uint8Array[] = [];
   let pos: number = 0;
+  let total: number = 0;
   while (pos + 2 <= input.length && input[pos] === 0x1f && input[pos + 1] === 0x8b) {
     if (pos + 10 > input.length) {
       break;
@@ -369,8 +378,15 @@ export function qgGunzip(input: Uint8Array): Uint8Array {
       throw new Error('gzip: 头越界');
     }
     const s: QgInflateState = new QgInflateState(input, p, 1 << 16);
+    if (maxBytes > 0) {
+      s.maxOut = maxBytes - total;
+    }
     qgInflateBlocks(s);
     outs.push(s.out.slice(0, s.outLen));
+    total += s.outLen;
+    if (maxBytes > 0 && total > maxBytes) {
+      throw new Error('gzip: 解压后内容过大');
+    }
     // 尾随 8 字节 CRC32+ISIZE（容忍缺失）
     pos = Math.min(s.inPos + 8, input.length);
   }

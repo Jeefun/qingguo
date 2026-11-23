@@ -865,7 +865,7 @@ export class JinguoduanjuSource extends QgSource {
     }
     let resp: QgHttpResponse;
     try {
-      resp = await QgHttp.request(address, method, headers, body, JD_TIMEOUT_MS);
+      resp = await QgHttp.request(address, method, headers, body, JD_TIMEOUT_MS, 0, 30, 'jinguoduanju');
     } catch (error) {
       const err: Error = error as Error;
       throw new Error(`禁果短剧连接失败：${err.message}`);

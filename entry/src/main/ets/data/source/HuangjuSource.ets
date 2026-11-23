@@ -405,7 +405,7 @@ async function hjRequest(method: string, route: string, query: Record<string, st
   if (token.length > 0) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const resp: QgHttpResponse = await QgHttp.request(address, method, headers, body, HJ_TIMEOUT_MS);
+  const resp: QgHttpResponse = await QgHttp.request(address, method, headers, body, HJ_TIMEOUT_MS, 0, 30, 'huangju');
   if (resp.data.length > limitBytes) {
     throw new Error('剧果返回的数据过大或读取失败');
   }

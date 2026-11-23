@@ -1197,7 +1197,7 @@ export class HeitaoSource extends QgSource {
     if (cookie.length > 0) {
       headers['Cookie'] = cookie;
     }
-    const resp: QgHttpResponse = await QgHttp.request(address, 'GET', headers, null, HT_TIMEOUT_MS);
+    const resp: QgHttpResponse = await QgHttp.request(address, 'GET', headers, null, HT_TIMEOUT_MS, 0, 30, this.id);
     if (resp.data.length > HT_MAX_BODY_BYTES) {
       throw new Error('黑桃页面数据过大');
     }

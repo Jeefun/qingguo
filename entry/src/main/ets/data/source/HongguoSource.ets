@@ -2,22 +2,38 @@
  * 红果短剧站源（App 接口 api5-normal-sinfonlineb.fqnovel.com）。
  * 设备注册（log.snssdk.com）+ X-Gorgon/X-Argus/X-Ladon 签名请求；
  * 目录按分类维护 offset/session 游标；搜索 = 名称联想 + 综合搜索页合并排序；
- * 播放跳过 CENC 加密与 bytevc2 编码变体（本应用不解密，全加密时报错）。
+ * 播放派生 CENC 内容密钥（hongguoContentKey），加密变体经网关解密端点播放；
+ * bytevc2 编码跳过，密钥不可用（v2）或 App/网页取流全失败时报错。
  * 移植自 guoapp provider_hongguo_app.go / _catalog.go / _search.go / _detail.go /
  * _native_media.go / _device.go / _suggestions.go / _search_seasons.go。
  */
-import { QgCategory, QgDrama, QgDramaDetail, QgEpisode, QgPageResult, QgPlayInfo } from '../../model/QgModels';
-import { qgSha256 } from '../QgCrypto';
-import { qgBase64Decode, qgToHex, qgUtf8Decode, qgUtf8Encode, qgUuidLike, qgRandomHex } from '../QgBytes';
+import { QgCategory, QgDrama, QgDramaDetail, QgEpisode, QgPageResult, QgPlayInfo, QgSeason } from '../../model/QgModels';
+import { qgSha256, qgMd5, qgSm3, qgSha512, qgAesCbcDecryptNoUnpad } from '../QgCrypto';
+import { qgBase64Encode, qgRandomBytes, qgConcat } from '../QgBytes';
+import { createPlaybackSigner, PlaybackHost, PlaybackSigner, PlaybackSignedRequest } from './HongguoPlaybackV5';
+import { qgBase64Decode, qgFromHex, qgToHex, qgUtf8Decode, qgUtf8Encode, qgUuidLike, qgRandomHex } from '../QgBytes';
 import { QgHttp, QgHttpResponse } from '../QgHttp';
+import { QgGateway } from '../QgGateway';
 import { QgJson } from '../QgJson';
 import { hongguoSignHeaders, newHongguoDeviceId } from './HongguoSign';
 import { QgSource } from './QgSource';
 
 export const APP_BASE: string = 'https://api5-normal-sinfonlineb.fqnovel.com';
+const PLAYBACK_BASE: string = 'https://api5-normal-sinfonlinea.fqnovel.com';
+const PLAYBACK_PATH: string = '/novel/player/multi_video_model/player/v1';
+const VIDEO_TAB_PATH: string = '/reading/bookapi/video_tab/multi_video_model/v1/';
+const SERIES_PACK_PATH: string = '/reading/distribution/book_pack_fields/inner_feed_detail/v1/';
+const PLAYBACK_UA: string = 'com.phoenix.read/74532 (Linux; U; Android 12; zh_CN_#Hans; PGT-AN10; Build/V417IR;tt-ok/3.12.13.20)';
+const playbackHost: PlaybackHost = {
+  hexDecode: qgFromHex, hexEncode: qgToHex, utf8Encode: qgUtf8Encode,
+  base64Encode: qgBase64Encode, randomBytes: qgRandomBytes, md5: qgMd5, sm3: qgSm3
+};
+const playbackSigner: PlaybackSigner = createPlaybackSigner(playbackHost);
 const WEB_BASE: string = 'https://hongguoduanju.com';
 const REGISTER_URL: string = 'https://log.snssdk.com/service/2/device_register/';
-export const APP_UA: string = 'com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; ' +
+/** 与在线模块 manifest 1.0.7 的取流接口及设备回退对齐。 */
+export const HONGGUO_MODULE_VERSION: string = '1.0.7';
+export const APP_UA: string = 'com.phoenix.read/74532 (Linux; U; Android 16; zh_CN; 25053RT47C; ' +
   'Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)';
 const WEB_UA: string = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) ' +
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1';
@@ -37,6 +53,25 @@ const SEARCH_PATH: string = '/reading/bookapi/search/tab/v/';
 const SUGGEST_COUNT: number = 50;
 const SUGGEST_TIMEOUT: number = 5000;
 const SEASON_LIMIT: number = 200;
+const SERIES_SEASON_LIMIT: number = 60;
+const SERIES_SEASON_TIMEOUT: number = 25000;
+/** 备用线路播放地址解密盐（hongguo 1.0.7 playUrlSalts） */
+const PLAY_URL_SALTS: string[] = ['4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58'];
+const PLAY_URL_HEADER_SIZE: number = 4;
+const PLAY_URL_PATTERN: RegExp = /^https?:\/\/\S+$/;
+/** 备用线路依次尝试的 codec_type（1=H.265，3=H.264） */
+const FALLBACK_CODEC_TYPES: string[] = ['1', '3'];
+
+/** 明确的注册拒绝才进入冷却；网络故障和网关错误可直接重试。 */
+class HongguoRegisterRejection extends Error {
+}
+
+class HongguoNoCompatibleMedia extends Error {
+}
+
+/** 备用线路播放地址编码版本不支持（hongguo 1.0.7 unsupportedPlayUrl） */
+class HongguoUnsupportedPlayUrl extends Error {
+}
 
 /** 分类/题材定义（hongguoAppGenres） */
 class HongguoGenre {
@@ -51,10 +86,12 @@ class HongguoGenre {
   }
 }
 
+// 分类顺序 = 发现页 chips 顺序；第 1 项同时是首页默认展示的分类。
+// 按用户偏好：AI剧 > 漫剧 > 真人剧（原顺序为真人剧 > 漫剧 > AI剧）。
 const GENRES: HongguoGenre[] = [
-  new HongguoGenre('short_play', 'default', '真人剧'),
+  new HongguoGenre('ai_series', 'ai_series', 'AI剧'),
   new HongguoGenre('comic_series', 'comic_series', '漫剧'),
-  new HongguoGenre('ai_series', 'ai_series', 'AI剧')
+  new HongguoGenre('short_play', 'default', '真人剧')
 ];
 
 /** 目录游标（hongguoCatalogCursor） */
@@ -100,6 +137,22 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+function preserveSeasonIntegers(text: string): string {
+  return text.replace(/"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (token: string): string => {
+    if (token.startsWith('"') || /[.eE]/.test(token) || Number.isSafeInteger(Number(token))) return token;
+    return '"' + token + '"';
+  });
+}
+
+function seasonPackBody(ids: string[], fields: string[]): string {
+  return '{"book_pack_channel":"inner_feed_detail","req_ids":[' + ids.join(',') +
+    '],"req_fields":' + JSON.stringify(fields) + '}';
+}
+
+function isSeasonId(value: string): boolean {
+  return /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value) <= 9223372036854775807n;
+}
+
 /** Go url.QueryEscape 兼容转义（空格 → +，保留 A-Za-z0-9-_.~） */
 function goQueryEscape(value: string): string {
   return encodeURIComponent(value)
@@ -130,6 +183,77 @@ function decodeBase64(value: string): Uint8Array {
   return qgBase64Decode(clean);
 }
 
+/** 整数二进制 1 的个数（Go bits.OnesCount） */
+function hongguoPopcount(v: number): number {
+  let x: number = v >>> 0;
+  let n: number = 0;
+  while (x !== 0) {
+    x &= x - 1;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * 红果 CENC 内容密钥派生（hongguoContentKey）。
+ * spade_a 结构：base64 → [头部1字节] [content] [tag^seed] [seed]；
+ * tagLength = raw[0]^raw[1]^raw[2]-48；content 逐字节
+ * decoded[i] = (previous ^ current) - 21 - popcount(i)（偶奇交替起始 250/85）；
+ * decoded[0] 为 base36 padding 数字，decoded[1..33) 为 32 字符 hex 密钥。
+ * app_v2 / web_v2 版本不支持（返回 null）。
+ */
+function hongguoContentKey(value: string): Uint8Array | null {
+  const raw: Uint8Array = qgBase64Decode(value.trim());
+  if (raw.length < 3) {
+    return null;
+  }
+  const tagLength: number = (raw[0] ^ raw[1] ^ raw[2]) - 48;
+  const contentLength: number = raw.length - tagLength - 1;
+  if (tagLength < 1 || contentLength < 33 || contentLength >= raw.length) {
+    return null;
+  }
+  const seed: number = raw[raw.length - tagLength - 2] ^ raw[raw.length - tagLength - 1];
+  const tagBytes: Uint8Array = new Uint8Array(tagLength);
+  for (let i: number = 0; i < tagLength; i++) {
+    tagBytes[i] = raw[raw.length - tagLength + i] ^ seed;
+  }
+  const tag: string = qgUtf8Decode(tagBytes);
+  if (tag === 'app_v2' || tag === 'web_v2') {
+    return null;
+  }
+  const decoded: Uint8Array = new Uint8Array(contentLength);
+  let prevEven: number = 250;
+  let prevOdd: number = 85;
+  for (let i: number = 0; i < contentLength; i++) {
+    const current: number = raw[1 + i];
+    let previous: number;
+    if (i % 2 === 0) {
+      previous = prevEven;
+      prevEven = current;
+    } else {
+      previous = prevOdd;
+      prevOdd = current;
+    }
+    decoded[i] = ((previous ^ current) - 21 - hongguoPopcount(i)) & 0xff;
+  }
+  const padValue: number = parseInt(String.fromCharCode(decoded[0]), 36);
+  if (Number.isNaN(padValue)) {
+    return null;
+  }
+  if (contentLength - padValue - 1 !== 32) {
+    return null;
+  }
+  let hexText: string = '';
+  for (let i: number = 1; i < 33; i++) {
+    hexText += String.fromCharCode(decoded[i]);
+  }
+  const key: Uint8Array = qgFromHex(hexText);
+  if (key.length !== 16) {
+    return null;
+  }
+  return key;
+}
+
 /** 是否 http(s) 媒体地址（isProviderHTTPMediaURL：无 userinfo、host 非空） */
 function isHttpMediaUrl(raw: string): boolean {
   const value: string = raw.trim();
@@ -139,6 +263,99 @@ function isHttpMediaUrl(raw: string): boolean {
   }
   const host: string = match[1];
   return host.length > 0 && !host.includes('@');
+}
+
+/** 定位 JSON 对象值在文本中的结束下标（括号深度 + 字符串转义感知） */
+function routerJsonEnd(text: string, start: number): number {
+  let depth: number = 0;
+  let inString: boolean = false;
+  let escaped: boolean = false;
+  for (let i: number = start; i < text.length; i++) {
+    const ch: string = text.charAt(i);
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{' || ch === '[') {
+      depth++;
+    } else if (ch === '}' || ch === ']') {
+      depth--;
+      if (depth === 0) {
+        return i + 1;
+      }
+    }
+  }
+  return -1;
+}
+
+/** 解析网页内嵌 _ROUTER_DATA（parseRouterData），返回 [JSON 原文, 解析结果] */
+function parseRouterData(raw: string): RouterData {
+  const marker: RegExpExecArray | null = /(?:window\.)?_ROUTER_DATA\s*=\s*/.exec(raw);
+  if (marker === null) {
+    return new RouterData('', null);
+  }
+  let first: number = marker.index + marker[0].length;
+  while (first < raw.length && /\s/.test(raw.charAt(first))) {
+    first++;
+  }
+  if (first >= raw.length || raw.charAt(first) !== '{') {
+    return new RouterData('', null);
+  }
+  const end: number = routerJsonEnd(raw, first);
+  if (end <= first) {
+    return new RouterData('', null);
+  }
+  const jsonText: string = raw.substring(first, end);
+  return new RouterData(jsonText, QgJson.obj(QgJson.parse(jsonText)));
+}
+
+/** _ROUTER_DATA 解析结果：原文 + 对象视图 */
+class RouterData {
+  rawJson: string = '';
+  data: Record<string, Object> | null = null;
+
+  constructor(rawJson: string, data: Record<string, Object> | null) {
+    this.rawJson = rawJson;
+    this.data = data;
+  }
+}
+
+/** loaderData 内按名称（含前缀）查找页面对象（routerLoaderMap） */
+function routerLoaderMap(data: Record<string, Object> | null, names: string[]): Record<string, Object> | null {
+  if (data === null) {
+    return null;
+  }
+  const loader: Record<string, Object> | null = QgJson.field(data, 'loaderData');
+  if (loader === null) {
+    return null;
+  }
+  for (let i: number = 0; i < names.length; i++) {
+    const page: Record<string, Object> | null = QgJson.field(loader, names[i]);
+    if (page !== null && Object.keys(page).length > 0) {
+      return page;
+    }
+  }
+  const keys: string[] = Object.keys(loader);
+  for (let k: number = 0; k < keys.length; k++) {
+    const key: string = keys[k];
+    for (let i: number = 0; i < names.length; i++) {
+      if (names[i].length > 0 && key.startsWith(names[i])) {
+        const page: Record<string, Object> | null = QgJson.field(loader, key);
+        if (page !== null && Object.keys(page).length > 0) {
+          return page;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 /** 搜索文本规范化（hongguoSearchText：NFKC + 去空白标点 + 小写） */
@@ -334,6 +551,10 @@ function dramaFromRow(value: Object, category: string): QgDrama | null {
   drama.cover = cover;
   drama.intro = intro;
   drama.remark = remark;
+  // 红果 1.0.4：听书结果增加「听书 · 共 N 章」角标。
+  if (genre.includes('听书') || category.includes('听书')) {
+    drama.badge = count.length > 0 ? `听书 · 共 ${count} 章` : '听书';
+  }
   drama.tags = tags;
   const episodeCount: number = Number(count);
   drama.episodeCount = Number.isNaN(episodeCount) ? 0 : episodeCount;
@@ -368,6 +589,9 @@ function mergeDramas(base: QgDrama, extra: QgDrama): void {
   if (base.remark.length === 0) {
     base.remark = extra.remark;
   }
+  if (base.badge.length === 0) {
+    base.badge = extra.badge;
+  }
   if (base.viewsText.length === 0) {
     base.viewsText = extra.viewsText;
   }
@@ -391,6 +615,13 @@ export class HongguoSource extends QgSource {
   private static registered: boolean = false;
   private static registerPausedUntil: number = 0;
   private static registerPauseErr: string = '';
+  private static registerPromise: Promise<void> | null = null;
+  private static helperDeviceId: string = newHongguoDeviceId();
+  private static helperInstallId: string = newHongguoDeviceId();
+  private static helperRegistered: boolean = false;
+  private static helperRegisterPausedUntil: number = 0;
+  private static helperRegisterPauseErr: string = '';
+  private static helperRegisterPromise: Promise<void> | null = null;
   /** 目录游标（feedKey → cursor） */
   private static cursors: Map<string, HongguoCursor> = new Map<string, HongguoCursor>();
   /** 详情缓存 */
@@ -428,10 +659,10 @@ export class HongguoSource extends QgSource {
     return {
       'aid': '8662',
       'app_name': 'novelread',
-      'version_code': '73532',
-      'version_name': '7.3.5.32',
-      'manifest_version_code': '73532',
-      'update_version_code': '73532',
+      'version_code': '74532',
+      'version_name': '7.4.5.32',
+      'manifest_version_code': '74532',
+      'update_version_code': '74532',
       'channel': 'update_64',
       'device_platform': 'android',
       'os': 'android',
@@ -449,11 +680,20 @@ export class HongguoSource extends QgSource {
     };
   }
 
+  /** 上游 1.0.3 播放接口使用独立客户端参数，与目录接口分开。 */
+  private static playbackQuery(deviceId: string, installId: string): Record<string, string> {
+    return {
+      'aid': '8662', 'app_name': 'novelread', 'version_code': '74532', 'version_name': '7.4.5.32',
+      'channel': 'vivo_8662_64', 'device_platform': 'android', 'device_type': 'PGT-AN10', 'os_version': '12',
+      'update_version_code': '74532', 'iid': installId, 'cdid': qgUuidLike(), 'device_id': deviceId
+    };
+  }
+
   /** 设备注册（registerHongguoDevice；拒绝时暂停 10 分钟） */
-  private static async registerDevice(): Promise<void> {
+  private static async registerDevice(helper: boolean = false): Promise<void> {
     const header: Record<string, Object> = {
-      'display_name': '红果免费短剧', 'aid': 8662, 'app_version': '7.3.5.32', 'version_code': 73532,
-      'manifest_version_code': 73532, 'update_version_code': 73532, 'channel': 'update_64',
+      'display_name': '红果免费短剧', 'aid': 8662, 'app_version': '7.4.5.32', 'version_code': 74532,
+      'manifest_version_code': 74532, 'update_version_code': 74532, 'channel': 'update_64',
       'package': 'com.phoenix.read',
       'app_language': 'zh', 'os': 'Android', 'os_version': '16', 'os_api': 36,
       'device_model': '25053RT47C', 'device_brand': 'Redmi', 'device_manufacturer': 'Xiaomi',
@@ -483,8 +723,11 @@ export class HongguoSource extends QgSource {
       'Accept': 'application/json',
       'Content-Type': 'application/json; charset=utf-8'
     };
-    let resp = await QgHttp.request(url, 'POST', headers, body, REQUEST_TIMEOUT);
+    let resp = await QgHttp.request(url, 'POST', headers, body, REQUEST_TIMEOUT, 0, 30, 'hongguo');
     if (resp.status !== 200) {
+      if (resp.status >= 400 && resp.status < 500 && resp.status !== 408 && resp.status !== 429) {
+        throw new HongguoRegisterRejection(`红果设备注册 HTTP ${resp.status}`);
+      }
       throw new Error(`红果设备注册 HTTP ${resp.status}`);
     }
     if (resp.data.length > 64 * 1024) {
@@ -499,30 +742,64 @@ export class HongguoSource extends QgSource {
     const newInstallId: string = firstNonEmpty2(QgJson.pick(result, ['install_id_str', 'install_id']), '');
     if (!RE_NUMERIC_ID.test(newDeviceId) || !RE_NUMERIC_ID.test(newInstallId) ||
       newDeviceId === '0' || newInstallId === '0') {
-      throw new Error('红果设备注册未返回设备号');
+      throw new HongguoRegisterRejection('红果设备注册未返回设备号');
     }
-    HongguoSource.deviceId = newDeviceId;
-    HongguoSource.installId = newInstallId;
-    HongguoSource.registered = true;
+    if (helper) {
+      HongguoSource.helperDeviceId = newDeviceId;
+      HongguoSource.helperInstallId = newInstallId;
+      HongguoSource.helperRegistered = true;
+    } else {
+      HongguoSource.deviceId = newDeviceId;
+      HongguoSource.installId = newInstallId;
+      HongguoSource.registered = true;
+    }
   }
 
   /** 确保设备可用（ensureHongguoDevice：注册被拒后暂停 10 分钟） */
-  private static async ensureDevice(rejected: string): Promise<void> {
-    const settled: boolean = (rejected.length === 0 && HongguoSource.registered) ||
-      (rejected.length > 0 && rejected !== HongguoSource.deviceId);
+  private static async ensureDevice(rejected: string, helper: boolean = false): Promise<void> {
+    const registered: boolean = helper ? HongguoSource.helperRegistered : HongguoSource.registered;
+    const deviceId: string = helper ? HongguoSource.helperDeviceId : HongguoSource.deviceId;
+    const settled: boolean = (rejected.length === 0 && registered) ||
+      (rejected.length > 0 && rejected !== deviceId);
     if (settled) {
       return;
     }
-    if (Date.now() < HongguoSource.registerPausedUntil) {
-      throw new Error(`红果设备注册暂不可用：${HongguoSource.registerPauseErr}`);
+    const pausedUntil: number = helper ? HongguoSource.helperRegisterPausedUntil : HongguoSource.registerPausedUntil;
+    if (Date.now() < pausedUntil) {
+      const reason: string = helper ? HongguoSource.helperRegisterPauseErr : HongguoSource.registerPauseErr;
+      throw new Error(`红果设备注册暂不可用：${reason}`);
+    }
+    const existing: Promise<void> | null = helper ? HongguoSource.helperRegisterPromise : HongguoSource.registerPromise;
+    if (existing !== null) {
+      await existing;
+      return;
+    }
+    const pending: Promise<void> = HongguoSource.registerDevice(helper);
+    if (helper) {
+      HongguoSource.helperRegisterPromise = pending;
+    } else {
+      HongguoSource.registerPromise = pending;
     }
     try {
-      await HongguoSource.registerDevice();
+      await pending;
     } catch (error) {
       const err: Error = error as Error;
-      HongguoSource.registerPausedUntil = Date.now() + REGISTER_PAUSE_MS;
-      HongguoSource.registerPauseErr = err.message;
+      if (err instanceof HongguoRegisterRejection) {
+        if (helper) {
+          HongguoSource.helperRegisterPausedUntil = Date.now() + REGISTER_PAUSE_MS;
+          HongguoSource.helperRegisterPauseErr = err.message;
+        } else {
+          HongguoSource.registerPausedUntil = Date.now() + REGISTER_PAUSE_MS;
+          HongguoSource.registerPauseErr = err.message;
+        }
+      }
       throw err;
+    } finally {
+      if (helper) {
+        HongguoSource.helperRegisterPromise = null;
+      } else {
+        HongguoSource.registerPromise = null;
+      }
     }
   }
 
@@ -531,45 +808,62 @@ export class HongguoSource extends QgSource {
    * 空响应轮换设备（≤3 次），4xx 直接失败，5xx/网络错误重试（≤3 次）。
    */
   private static async appRequest(method: string, path: string,
-    extra: Record<string, string> | null, payload: Record<string, Object> | null): Promise<Object> {
-    await HongguoSource.ensureDevice('');
-    let deviceId: string = HongguoSource.deviceId;
-    let installId: string = HongguoSource.installId;
-    const params: Record<string, string> = HongguoSource.appQuery(deviceId, installId);
+    extra: Record<string, string> | null, payload: Record<string, Object> | string | null,
+    helper: boolean = false, deadline: number = 0): Promise<Object> {
+    await HongguoSource.ensureDevice('', helper);
+    let deviceId: string = helper ? HongguoSource.helperDeviceId : HongguoSource.deviceId;
+    let installId: string = helper ? HongguoSource.helperInstallId : HongguoSource.installId;
+    const playback: boolean = path === PLAYBACK_PATH;
+    const signedV5: boolean = playback || path === VIDEO_TAB_PATH;
+    const params: Record<string, string> = playback ? HongguoSource.playbackQuery(deviceId, installId) :
+      HongguoSource.appQuery(deviceId, installId);
     if (extra !== null) {
       const keys: string[] = Object.keys(extra);
       for (let i: number = 0; i < keys.length; i++) {
         params[keys[i]] = extra[keys[i]];
       }
     }
-    const body: Uint8Array | null = payload !== null ? qgUtf8Encode(JSON.stringify(payload)) : null;
+    const body: Uint8Array | null = payload !== null ?
+      qgUtf8Encode(typeof payload === 'string' ? payload : JSON.stringify(payload)) : null;
     const attempts: number = 3;
     let attempt: number = 0;
     let rotations: number = 0;
     let lastError: Error | null = null;
     while (attempt < attempts) {
+      if (deadline > 0 && Date.now() >= deadline) throw new Error('红果分季请求超时');
       if (attempt > 0) {
-        await sleep(attempt * 1000);
+        await sleep(deadline > 0 ? Math.max(0, Math.min(attempt * 1000, deadline - Date.now())) : attempt * 1000);
       }
       params['device_id'] = deviceId;
       params['iid'] = installId;
       params['_rticket'] = `${Date.now()}`;
       const rawQuery: string = buildQuery(params);
-      const url: string = `${APP_BASE}${path}?${rawQuery}`;
-      const headers: Record<string, string> = {
+      let url: string = `${APP_BASE}${path}?${rawQuery}`;
+      const headers: Record<string, string> = signedV5 ? { 'User-Agent': PLAYBACK_UA, 'Accept': 'application/json' } : {
         'User-Agent': APP_UA,
         'Accept': 'application/json',
         'X-XS-From-Web': '0',
         'Sdk-Version': '2'
       };
-      const signed: Record<string, string> = hongguoSignHeaders(rawQuery, body, deviceId, '8662');
+      let signed: Record<string, string>;
+      if (signedV5) {
+        const prepared: PlaybackSignedRequest = playbackSigner.sign((playback ? PLAYBACK_BASE : APP_BASE) + path,
+          params, body, Date.now());
+        url = prepared.url;
+        headers['User-Agent'] = PLAYBACK_UA;
+        signed = prepared.headers;
+      } else {
+        signed = hongguoSignHeaders(rawQuery, body, deviceId, '8662');
+      }
       const signKeys: string[] = Object.keys(signed);
       for (let i: number = 0; i < signKeys.length; i++) {
         headers[signKeys[i]] = signed[signKeys[i]];
       }
       let resp: QgHttpResponse | null = null;
       try {
-        resp = await QgHttp.request(url, method, headers, body, REQUEST_TIMEOUT);
+        resp = await QgHttp.request(url, method, headers, body,
+          deadline > 0 ? Math.max(1, Math.min(REQUEST_TIMEOUT, deadline - Date.now())) : REQUEST_TIMEOUT,
+          0, 30, 'hongguo');
       } catch (error) {
         lastError = error as Error;
         attempt++;
@@ -591,10 +885,10 @@ export class HongguoSource extends QgSource {
         lastError = new Error('红果 App 接口未返回有效数据');
         if (rotations < DEVICE_ROTATIONS) {
           try {
-            await HongguoSource.ensureDevice(deviceId);
+            await HongguoSource.ensureDevice(deviceId, helper);
             rotations++;
-            deviceId = HongguoSource.deviceId;
-            installId = HongguoSource.installId;
+            deviceId = helper ? HongguoSource.helperDeviceId : HongguoSource.deviceId;
+            installId = helper ? HongguoSource.helperInstallId : HongguoSource.installId;
             continue;
           } catch (error) {
             lastError = new Error(`红果 App 接口未返回有效数据（设备注册失败：${(error as Error).message}）`);
@@ -606,7 +900,7 @@ export class HongguoSource extends QgSource {
       if (resp.data.length > MAX_BODY_BYTES) {
         throw new Error('红果 App 接口未返回有效数据');
       }
-      const parsed: Object | null = QgJson.parse(resp.text());
+      const parsed: Object | null = QgJson.parse(path === SERIES_PACK_PATH ? preserveSeasonIntegers(resp.text()) : resp.text());
       const result: Record<string, Object> | null = QgJson.obj(parsed);
       if (result === null) {
         throw new Error('红果 App 接口返回格式异常');
@@ -815,7 +1109,7 @@ export class HongguoSource extends QgSource {
       'Accept': 'application/json',
       'Accept-Language': 'zh-CN,zh;q=0.9'
     };
-    const text: string = await QgHttp.getText(url, headers, SUGGEST_TIMEOUT);
+    const text: string = await QgHttp.getText(url, headers, SUGGEST_TIMEOUT, 'hongguo');
     const parsed: Object | null = QgJson.parse(text);
     const root: Record<string, Object> | null = QgJson.obj(parsed);
     if (root === null) {
@@ -1067,6 +1361,78 @@ export class HongguoSource extends QgSource {
     return entry;
   }
 
+  async seasons(dramaId: string): Promise<QgSeason[]> {
+    const deadline: number = Date.now() + SERIES_SEASON_TIMEOUT;
+    let timer: number = -1;
+    const timeout: Promise<QgSeason[]> = new Promise<QgSeason[]>((resolve, reject) => {
+      timer = setTimeout(() => { reject(new Error('红果分季请求超时，请重试')); }, SERIES_SEASON_TIMEOUT);
+    });
+    try {
+      return await Promise.race([this.loadSeasons(dramaId, deadline), timeout]);
+    } finally {
+      if (timer >= 0) clearTimeout(timer);
+    }
+  }
+
+  private async loadSeasons(dramaId: string, deadline: number): Promise<QgSeason[]> {
+    const siteId: string = dramaId.startsWith('hongguo:') ? dramaId.slice('hongguo:'.length) : '';
+    if (siteId.startsWith('book-')) return [];
+    if (!isSeasonId(siteId)) throw new Error('红果分季剧集 ID 无效');
+    const raw: Object = await HongguoSource.appRequest('POST', SERIES_PACK_PATH, null,
+      seasonPackBody([siteId], ['album_id', 'album_title', 'album_serial_count', 'series_in_album_order', 'album_series_ids']),
+      false, deadline);
+    const row: Record<string, Object> | null = QgJson.field(QgJson.field(QgJson.obj(raw), 'data'), siteId);
+    const album: Record<string, Object> | null = QgJson.field(row, 'album_info');
+    const rawIds: Object[] = QgJson.fieldArr(album, 'album_series_ids');
+    if (rawIds.length < 2 || rawIds.length > SERIES_SEASON_LIMIT) return [];
+    const ids: string[] = [];
+    for (const value of rawIds) {
+      const id: string = QgJson.str(value);
+      if (!isSeasonId(id) || ids.includes(id)) {
+        throw new Error('红果分季列表包含无效或重复剧集');
+      }
+      ids.push(id);
+    }
+    if (!ids.includes(siteId)) return [];
+    let packed: Record<string, Object> | null = null;
+    try {
+      const result: Object = await HongguoSource.appRequest('POST', SERIES_PACK_PATH, null,
+        seasonPackBody(ids, ['series_id', 'series_title', 'series_cover', 'series_intro', 'episode_cnt',
+          'series_status', 'category_schema', 'series_play_cnt', 'publish_time']), false, deadline);
+      packed = QgJson.field(QgJson.obj(result), 'data');
+    } catch (error) {
+      if (Date.now() >= deadline) throw new Error('红果分季请求超时');
+    }
+    const seasons: QgSeason[] = [];
+    for (let index: number = 0; index < ids.length; index++) {
+      if (Date.now() >= deadline) throw new Error('红果分季请求超时，请重试');
+      const id: string = ids[index];
+      const item: Record<string, Object> | null = QgJson.field(packed, id);
+      const base: Record<string, Object> | null = QgJson.field(item, 'base_info');
+      let drama: QgDrama | null = null;
+      if (base !== null && QgJson.pick(base, ['series_id_str', 'series_id']) === id &&
+        QgJson.pick(base, ['series_title']).length > 0) {
+        drama = dramaFromRow(base, '短剧');
+      }
+      if (drama === null && Date.now() < deadline) {
+        try {
+          const payload: Record<string, Object> = { 'series_id': id };
+          const result: Object = await HongguoSource.appRequest('POST', '/novel/player/video_detail/v1/',
+            null, payload, false, deadline);
+          const detail: Record<string, Object> | null =
+            QgJson.field(QgJson.field(QgJson.obj(result), 'data'), 'video_data');
+          if (detail !== null && QgJson.pick(detail, ['series_id_str', 'series_id']) === id &&
+            QgJson.pick(detail, ['series_title', 'series_name', 'title']).length > 0) drama = dramaFromRow(detail, '短剧');
+        } catch (error) {
+        }
+      }
+      if (Date.now() >= deadline) throw new Error('红果分季请求超时，请重试');
+      if (drama === null) throw new Error(`红果第${index + 1}季信息暂不可用，请重试`);
+      seasons.push(new QgSeason(index + 1, drama));
+    }
+    return seasons.length >= 2 && seasons.some((season: QgSeason): boolean => season.drama.id === dramaId) ? seasons : [];
+  }
+
   /** 变体地址提取（hongguoMediaAddresses） */
   private static mediaAddresses(variant: Record<string, Object>): string[] {
     const addresses: string[] = [];
@@ -1128,59 +1494,370 @@ export class HongguoSource extends QgSource {
     if (!RE_NUMERIC_ID.test(videoId)) {
       throw new Error('红果视频 ID 无效');
     }
-    const bizParam: Record<string, Object> = {
-      'need_all_video_definition': true,
-      'video_platform': 3
-    };
-    const payload: Record<string, Object> = {
-      'video_id': videoId,
-      'content_type': 1,
-      'biz_param': bizParam
-    };
-    const result: Object = await HongguoSource.appRequest('POST',
-      '/novel/player/video_model/v1/', null, payload);
-    const data: Record<string, Object> | null = QgJson.field(QgJson.obj(result), 'data');
-    if (data === null) {
-      throw new Error('红果 App 播放信息格式异常');
-    }
-    // video_model：对象或 base64 编码 JSON（resolveHongguoAppMedia）
-    let model: Record<string, Object> | null = QgJson.field(data, 'video_model');
-    const encoded: Object | undefined = data['video_model'];
-    if (model === null && typeof encoded === 'string' && encoded.length > 0) {
-      let decoded: string = encoded;
+    let info: QgPlayInfo;
+    try {
+      info = await HongguoSource.appMedia(videoId);
+    } catch (appError) {
+      const appErr: Error = appError as Error;
       try {
-        const raw: Uint8Array = decodeBase64(encoded);
-        if (raw.length > 0) {
-          decoded = qgUtf8Decode(raw);
+        info = await HongguoSource.webMedia(siteId, videoId);
+      } catch (webError) {
+        const webErr: Error = webError as Error;
+        throw new Error(`红果 App 取流失败：${appErr.message}；网页取流失败：${webErr.message}`);
+      }
+    }
+    // App 接口只返回加密流时，先试网页播放页的明文地址，避免走本地解密。
+    // 网页流可能仅允许试看或 ID 校验失败，失败就保留 App 加密流。
+    if (info.cencKey.length > 0) {
+      try {
+        const plain: QgPlayInfo = await HongguoSource.webMedia(siteId, videoId);
+        if (plain.url.length > 0) {
+          info = plain;
         }
-      } catch (error) {
-        // 保持原串直接解析
-      }
-      const parsed: Object | null = QgJson.parse(decoded);
-      model = QgJson.obj(parsed);
-      if (model === null) {
-        throw new Error('红果 App 播放信息格式异常');
+      } catch (webError) {
+        // 网页兜底不可用，继续用 App 加密流
       }
     }
-    if (model === null || Object.keys(model).length === 0) {
-      const list: Object[] = QgJson.fieldArr(data, 'video_list');
-      if (list.length === 0) {
-        throw new Error('红果 App 未返回兼容的媒体，已跳过不支持的编码');
-      }
-      const fallback: Record<string, Object> = {
-        'video_list': data['video_list'],
-        'video_duration': data['video_duration'],
-        'duration': data['duration']
-      };
-      model = fallback;
-    }
-    const info: QgPlayInfo = HongguoSource.selectMedia(model);
     // 弹幕：评论接口按 videoId 分组（见 HongguoDanmaku.ets）
     info.danmakuId = videoId;
     return info;
   }
 
-  /** 选择最佳可播变体（selectHongguoAppMedia；加密变体本应用无法解密，直接跳过） */
+  /** App 接口取流（resolveHongguoAppMedia） */
+  private static async appMedia(videoId: string): Promise<QgPlayInfo> {
+    if (!RE_NUMERIC_ID.test(videoId)) {
+      throw new Error('红果视频 ID 无效');
+    }
+    let lastErrorMessage: string = '红果 App 未返回兼容的媒体';
+    for (const helper of [false, true]) {
+      try {
+        return await HongguoSource.fetchAppMedia(videoId, helper);
+      } catch (error) {
+        const err: Error = error as Error;
+        if (!(err instanceof HongguoNoCompatibleMedia)) {
+          throw err;
+        }
+        lastErrorMessage = err.message;
+      }
+    }
+    try {
+      await HongguoSource.ensureDevice(HongguoSource.helperDeviceId, true);
+    } catch (error) {
+      throw new Error(`${lastErrorMessage}；更换辅助设备也没有成功：${(error as Error).message}`);
+    }
+    return HongguoSource.fetchAppMedia(videoId, true);
+  }
+
+  private static async fetchAppMedia(videoId: string, helper: boolean): Promise<QgPlayInfo> {
+    let tabError: Error = new Error('红果分集取流失败');
+    try {
+      const query: Record<string, string> = {
+        'video_id': videoId, 'video_id_type': '0', 'device_level': '1',
+        'need_all_video_definition': '1', 'need_mp4_align': '0',
+        'use_os_player': '0', 'video_platform': '1024', 'source': '0', 'from_video_id': ''
+      };
+      const result: Object = await HongguoSource.appRequest('GET', VIDEO_TAB_PATH, query, null, helper);
+      const root: Record<string, Object> | null = QgJson.field(QgJson.obj(result), 'data');
+      const entries: Record<string, Object> | null = QgJson.field(root, 'video_model_data');
+      return await HongguoSource.mediaFromData(QgJson.field(entries, videoId));
+    } catch (error) {
+      if (error instanceof HongguoNoCompatibleMedia) {
+        throw error;
+      }
+      tabError = error as Error;
+    }
+    try {
+      return await HongguoSource.playerMedia(videoId, helper);
+    } catch (error) {
+      if (error instanceof HongguoNoCompatibleMedia) {
+        throw error;
+      }
+      throw new Error(`${tabError.message}；播放器接口：${(error as Error).message}`);
+    }
+  }
+
+  private static async playerMedia(videoId: string, helper: boolean): Promise<QgPlayInfo> {
+    const bizParam: Record<string, Object> = {
+      'detail_page_version': 0, 'device_level': 1,
+      'disable_digg_stat': false, 'disable_video_relate_book': false,
+      'need_all_video_definition': true, 'need_mp4_align': false,
+      'use_os_player': false, 'use_server_dns': false, 'video_platform': 1024
+    };
+    const videoMap: Record<string, Object> = { '1004': [videoId] };
+    const payload: Record<string, Object> = {
+      'biz_param': bizParam, 'mixed_video_id_map': videoMap, 'dr_scene': 'player'
+    };
+    const result: Object = await HongguoSource.appRequest('POST', PLAYBACK_PATH, null, payload, helper);
+    const entries: Record<string, Object> | null = QgJson.field(QgJson.obj(result), 'data');
+    const group: Record<string, Object> | null = QgJson.field(entries, '1004');
+    const data: Record<string, Object> | null = QgJson.field(group !== null ? group : entries, videoId);
+    return await HongguoSource.mediaFromData(data);
+  }
+
+  private static async mediaFromData(data: Record<string, Object> | null): Promise<QgPlayInfo> {
+    if (data === null || Object.keys(data).length === 0) {
+      throw new Error('红果 App 未返回所请求的分集播放信息');
+    }
+    // video_model：对象或 base64 编码 JSON（resolveHongguoAppMedia）
+    let model: Record<string, Object> | null = QgJson.field(data, 'video_model');
+    const encoded: Object | undefined = data['video_model'];
+    if (model === null && typeof encoded === 'string' && encoded.length > 0) {
+      model = QgJson.obj(QgJson.parse(encoded));
+      if (model === null) {
+        try {
+          const raw: Uint8Array = decodeBase64(encoded);
+          if (raw.length > 0) {
+            model = QgJson.obj(QgJson.parse(qgUtf8Decode(raw)));
+          }
+        } catch (error) {
+        }
+      }
+      if (model === null) {
+        throw new Error('红果 App 播放信息格式异常');
+      }
+    }
+    if (model === null || Object.keys(model).length === 0) {
+      const fallback: Record<string, Object> = {
+        'video_list': data['video_list'] ?? [],
+        'video_duration': data['video_duration'] ?? 0,
+        'duration': data['duration'] ?? 0
+      };
+      model = fallback;
+    }
+    return HongguoSource.selectMediaWithFallback(model);
+  }
+
+  /** selectMedia 失败且无兼容线路时走备用接口取 H.265/H.264 线路（mediaFromModel） */
+  private static async selectMediaWithFallback(model: Record<string, Object>): Promise<QgPlayInfo> {
+    try {
+      return HongguoSource.selectMedia(model);
+    } catch (error) {
+      if (!(error instanceof HongguoNoCompatibleMedia)) {
+        throw error as Error;
+      }
+      return HongguoSource.fallbackMedia(model, error);
+    }
+  }
+
+  /** 备用线路取流（fallbackMedia）：按 codec_type 依次请求 fallback_api 端点 */
+  private static async fallbackMedia(model: Record<string, Object>,
+    original: HongguoNoCompatibleMedia): Promise<QgPlayInfo> {
+    const api: Record<string, Object> | null = QgJson.field(model, 'fallback_api');
+    const endpoint: string = api !== null ? QgJson.pick(api, ['fallback_api']) : '';
+    if (endpoint.length === 0) {
+      throw original;
+    }
+    let lastErrorMessage: string = original.message;
+    for (let i: number = 0; i < FALLBACK_CODEC_TYPES.length; i++) {
+      try {
+        const data: Record<string, Object> = await HongguoSource.fetchFallbackPlay(endpoint, FALLBACK_CODEC_TYPES[i]);
+        const fallbackModel: Record<string, Object> = {
+          'video_list': HongguoSource.fallbackVariants(data),
+          'video_duration': QgJson.pick(data, ['video_duration'])
+        };
+        return HongguoSource.selectMedia(fallbackModel);
+      } catch (error) {
+        const err: Error = error as Error;
+        if (!(err instanceof HongguoNoCompatibleMedia)) {
+          throw new Error(`${original.message}；备用线路：${err.message}`);
+        }
+        lastErrorMessage = err.message;
+      }
+    }
+    throw new HongguoNoCompatibleMedia(`${original.message}；备用线路：${lastErrorMessage}`);
+  }
+
+  /** 请求备用线路端点（fetchFallbackPlay）：替换/追加 codec_type 参数 */
+  private static async fetchFallbackPlay(endpoint: string, codecType: string): Promise<Record<string, Object>> {
+    const pattern: RegExp = /([?&])codec_type=[^&]*/;
+    const address: string = pattern.test(endpoint)
+      ? endpoint.replace(pattern, `$1codec_type=${codecType}`)
+      : endpoint + (endpoint.includes('?') ? '&' : '?') + 'codec_type=' + codecType;
+    let resp: QgHttpResponse;
+    try {
+      resp = await QgHttp.request(address, 'GET', {
+        'User-Agent': PLAYBACK_UA,
+        'Accept': 'application/json'
+      }, null, REQUEST_TIMEOUT, MAX_BODY_BYTES, 30, 'hongguo');
+    } catch (error) {
+      throw new Error(`红果备用线路请求失败：${(error as Error).message}`);
+    }
+    if (resp.status !== 200) {
+      throw new Error(`红果备用线路 HTTP ${resp.status}`);
+    }
+    const result: Record<string, Object> | null = QgJson.obj(QgJson.parse(resp.text()));
+    const info: Record<string, Object> | null = QgJson.field(result, 'video_info');
+    const data: Record<string, Object> | null = QgJson.field(info, 'data');
+    if (data === null || Object.keys(data).length === 0) {
+      throw new Error('红果备用线路未返回有效数据');
+    }
+    return data;
+  }
+
+  /** 备用线路变体列表（fallbackVariants）：解码 main_url/backup_url_* 加密播放地址 */
+  private static fallbackVariants(data: Record<string, Object>): Object[] {
+    const seed: string = QgJson.pick(data, ['key_seed']);
+    const variants: Object[] = [];
+    let versionError: Error | null = null;
+    let decoded: number = 0;
+    const entries: Object[] = HongguoSource.fallbackEntries(data);
+    const urlKeys: string[] = ['main_url', 'backup_url_1', 'backup_url_2'];
+    for (let i: number = 0; i < entries.length; i++) {
+      const entry: Record<string, Object> | null = QgJson.obj(entries[i]);
+      if (entry === null) {
+        continue;
+      }
+      const meta: Record<string, Object> = {
+        'codec_type': QgJson.pick(entry, ['codec_type']),
+        'definition': QgJson.pick(entry, ['definition']),
+        'vwidth': QgJson.pick(entry, ['vwidth']),
+        'vheight': QgJson.pick(entry, ['vheight'])
+      };
+      const variant: Record<string, Object> = {
+        'gear_des_key': QgJson.pick(entry, ['gear_des_key']),
+        'video_meta': meta
+      };
+      for (let j: number = 0; j < urlKeys.length; j++) {
+        let address: string = '';
+        try {
+          address = HongguoSource.decodePlayUrl(QgJson.pick(entry, [urlKeys[j]]), seed);
+        } catch (error) {
+          if (!(error instanceof HongguoUnsupportedPlayUrl)) {
+            throw error as Error;
+          }
+          versionError = error as Error;
+          continue;
+        }
+        if (address.length > 0) {
+          variant[urlKeys[j]] = address;
+          decoded++;
+        }
+      }
+      const spade: string = QgJson.pick(entry, ['spade_a']);
+      const method: string = QgJson.pick(entry, ['encryption_method']);
+      if (spade.length > 0 || method.length > 0 || entry['encrypt'] === true) {
+        const encryption: Record<string, Object> = {
+          'spade_a': spade,
+          'encryption_method': method,
+          'encrypt': entry['encrypt'] === true
+        };
+        variant['encrypt_info'] = encryption;
+      }
+      variants.push(variant);
+    }
+    if (versionError !== null && decoded === 0) {
+      throw versionError;
+    }
+    return variants;
+  }
+
+  /** video_list 兼容数组/字典两种结构（fallbackEntries） */
+  private static fallbackEntries(data: Record<string, Object>): Object[] {
+    const list: Object | undefined = data['video_list'];
+    if (Array.isArray(list)) {
+      return list as Object[];
+    }
+    const rows: Record<string, Object> | null = QgJson.obj(list);
+    if (rows !== null) {
+      const keys: string[] = Object.keys(rows);
+      const out: Object[] = [];
+      for (let i: number = 0; i < keys.length; i++) {
+        out.push(rows[keys[i]]);
+      }
+      return out;
+    }
+    return [];
+  }
+
+  /** 解码备用线路播放地址（decodePlayUrl）：a8 00 头 + AES-CBC(SHA512 派生密钥) */
+  private static decodePlayUrl(encoded: string, seed: string): string {
+    if (encoded.length === 0 || seed.length === 0) {
+      return encoded;
+    }
+    let key: Uint8Array;
+    let raw: Uint8Array;
+    try {
+      key = decodeBase64(seed);
+      raw = decodeBase64(encoded);
+    } catch (error) {
+      return encoded;
+    }
+    if (raw.length < 20 || raw[0] !== 0xa8 || raw[1] !== 0x00 ||
+      (raw.length - PLAY_URL_HEADER_SIZE) % 16 !== 0) {
+      return encoded;
+    }
+    for (let i: number = 0; i < PLAY_URL_SALTS.length; i++) {
+      const address: string = HongguoSource.decryptPlayUrl(raw, key, PLAY_URL_SALTS[i]);
+      if (address.length > 0) {
+        return address;
+      }
+    }
+    throw new HongguoUnsupportedPlayUrl(`红果备用线路编码版本 ${raw[2] | (raw[3] << 8)} 暂不支持`);
+  }
+
+  /** 单盐播放地址解密（decryptPlayUrl）：digest = SHA512(SHA512(key)+salt)，key/iv 取前 32 字节 */
+  private static decryptPlayUrl(raw: Uint8Array, key: Uint8Array, salt: string): string {
+    try {
+      const digest: Uint8Array = qgSha512(qgConcat([qgSha512(key), qgFromHex(salt)]));
+      const plain: Uint8Array = qgAesCbcDecryptNoUnpad(raw.slice(PLAY_URL_HEADER_SIZE),
+        digest.slice(0, 16), digest.slice(16, 32));
+      if (plain.length === 0) {
+        return '';
+      }
+      const pad: number = plain[plain.length - 1];
+      if (pad < 1 || pad > 16 || pad > plain.length) {
+        return '';
+      }
+      for (let i: number = plain.length - pad; i < plain.length; i++) {
+        if (plain[i] !== pad) {
+          return '';
+        }
+      }
+      const address: string = qgUtf8Decode(plain.slice(0, plain.length - pad));
+      return PLAY_URL_PATTERN.test(address) ? address : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  /** 网页播放页取流兜底（resolveHongguoWebMedia）：App 流全加密/失败时使用 */
+  private static async webMedia(seriesId: string, videoId: string): Promise<QgPlayInfo> {
+    const pageURL: string = `${WEB_BASE}/player/${seriesId}/${videoId}`;
+    const headers: Record<string, string> = {
+      'User-Agent': WEB_UA,
+      'Referer': `${WEB_BASE}/`,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'zh-CN,zh;q=0.9'
+    };
+    const body: string = await QgHttp.getText(pageURL, headers, REQUEST_TIMEOUT, 'hongguo');
+    const router: RouterData = parseRouterData(body);
+    const page: Record<string, Object> | null = routerLoaderMap(router.data, ['player_', 'player_page']);
+    // 校验剧集匹配：JSON 数字大 id 在 JS 下有精度损失，需辅以原文包含性校验
+    const parsedVid: string = page !== null ? QgJson.pick(page, ['vid']) : '';
+    const parsedSeries: string = page !== null ? QgJson.pick(page, ['series_id']) : '';
+    const idsMatch: boolean = (parsedVid === videoId && parsedSeries === seriesId) ||
+      (router.rawJson.includes(videoId) && router.rawJson.includes(seriesId));
+    if (page === null || !idsMatch) {
+      throw new Error('红果未返回所请求的剧集，可能仅允许网页试看；请在站点确认该集的访问权限');
+    }
+    const info2: Record<string, Object> | null = QgJson.field(page, 'video_player_info');
+    const addresses: string[] = info2 !== null ? HongguoSource.mediaAddresses(info2) : [];
+    if (addresses.length === 0) {
+      throw new Error('红果该集未提供公开播放地址，可能需要登录或 App 授权');
+    }
+    const durationSeconds: number = Number(info2 !== null ? QgJson.pick(info2, ['duration']) : '');
+    const out: QgPlayInfo = new QgPlayInfo();
+    out.url = addresses[0];
+    out.referer = `${WEB_BASE}/`;
+    out.headers = { 'User-Agent': WEB_UA, 'Referer': out.referer };
+    if (!Number.isNaN(durationSeconds) && durationSeconds > 0) {
+      out.durationMs = durationSeconds * 1000;
+    }
+    out.routes = addresses.slice(0, 16);
+    return out;
+  }
+
+  /** 选择最佳可播变体（selectHongguoAppMedia；加密变体派生 CENC 密钥后经网关解密播放） */
   private static selectMedia(model: Record<string, Object>): QgPlayInfo {
     let variants: Object[] = QgJson.fieldArr(model, 'video_list');
     if (variants.length === 0) {
@@ -1210,13 +1887,19 @@ export class HongguoSource extends QgSource {
         continue;
       }
       const encryption: Record<string, Object> | null = QgJson.field(variant, 'encrypt_info');
-      const spade: string = encryption !== null ? QgJson.pick(encryption, ['spade_a']) : '';
+      const spade: string = encryption !== null ? QgJson.pick(encryption, ['spade_a', 'spade']) : '';
       const encrypted: boolean = spade.length > 0 ||
         (encryption !== null && encryption['encrypt'] === true) ||
         (encryption !== null && QgJson.pick(encryption, ['encryption_method']) === 'cenc-aes-ctr');
+      let cencKeyHex: string = '';
       if (encrypted) {
-        encryptedSkipped++;
-        continue;
+        const contentKey: Uint8Array | null = spade.length > 0 ? hongguoContentKey(spade) : null;
+        if (contentKey === null) {
+          // v2 标签或结构异常：无法解密，跳过该变体
+          encryptedSkipped++;
+          continue;
+        }
+        cencKeyHex = qgToHex(contentKey);
       }
       let height: number = meta !== null ? Number(QgJson.pick(meta, ['vheight'])) : 0;
       if (Number.isNaN(height)) {
@@ -1239,19 +1922,26 @@ export class HongguoSource extends QgSource {
       if (codec === 'h264' || codec === 'avc1') {
         score++;
       }
+      // 明文流优先：加密流需要在本地网关用纯 JS 对整个 MP4 做 AES-CTR 解密，
+      // 实测会长时间占住主线程触发 THREAD_BLOCK_6S（AppFreeze 后被系统杀掉）。
+      // 只要服务端给了任何明文变体就选它，宁可画质略低也要能直接播。
+      if (cencKeyHex.length === 0) {
+        score += 100000;
+      }
       for (let j: number = 0; j < addresses.length; j++) {
-        choices.push(new HongguoScored(addresses[j], score, height));
+        choices.push(new HongguoScored(addresses[j], score, height, cencKeyHex));
       }
     }
     if (choices.length === 0) {
       if (encryptedSkipped > 0) {
-        throw new Error('红果该集为加密内容（CENC），当前版本暂不支持解密播放');
+        throw new Error('红果该集为加密内容（CENC），内容密钥不可用');
       }
-      throw new Error('红果 App 未返回兼容的媒体，已跳过不支持的编码');
+      throw new HongguoNoCompatibleMedia('红果 App 未返回兼容的媒体，已跳过不支持的编码或无地址的线路');
     }
     choices.sort((a: HongguoScored, b: HongguoScored): number => b.score - a.score);
     const info: QgPlayInfo = new QgPlayInfo();
     info.url = choices[0].url;
+    info.cencKey = choices[0].cencKey;
     info.referer = 'https://novel.snssdk.com/';
     info.headers = { 'User-Agent': APP_UA, 'Referer': info.referer };
     if (!Number.isNaN(durationSeconds) && durationSeconds > 0) {
@@ -1262,6 +1952,10 @@ export class HongguoSource extends QgSource {
     const seenQuality: Record<string, boolean> = {};
     for (let i: number = 0; i < choices.length; i++) {
       const c: HongguoScored = choices[i];
+      // 线路需与所选线路使用同一内容密钥（跨密钥线路无法复用同一 cencKey 播放）
+      if (c.cencKey !== choices[0].cencKey) {
+        continue;
+      }
       if (seenUrl[c.url] !== true) {
         seenUrl[c.url] = true;
         if (info.routes.length < 16) {
@@ -1285,11 +1979,14 @@ class HongguoScored {
   url: string = '';
   score: number = 0;
   height: number = 0;
+  /** CENC 内容密钥 hex（空 = 未加密） */
+  cencKey: string = '';
 
-  constructor(url: string, score: number, height: number) {
+  constructor(url: string, score: number, height: number, cencKey: string) {
     this.url = url;
     this.score = score;
     this.height = height;
+    this.cencKey = cencKey;
   }
 }
 

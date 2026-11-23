@@ -4,14 +4,16 @@
  * 沉浸式窗口 + 超级桌面（Mate 60 Pro → 问界M9）流转适配，方案取自实战验证形态：
  * - layoutFullScreen：内容延伸到状态栏与手势条下方，页面按避让区留白；
  * - 车机虚拟屏检测：displayIdChange 实时维护，流转/迁回都即时刷新；
- * - 车机侧 enableLandscapeMultiWindow + maximize/resize 兜底铺满（避免「只有中间一条竖窗」）；
+ * - 车机侧 enableLandscapeMultiWindow + 浮窗预调整 + maximize 兜底铺满（避免「只有中间一条竖窗」）；
  * - 安全区与窗口尺寸写入 AppStorage（vp），页面用 @StorageProp 订阅。
  */
 import { AbilityConstant, UIAbility, Want, Configuration, ConfigurationConstant } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window, display } from '@kit.ArkUI';
 import { BusinessError, deviceInfo } from '@kit.BasicServicesKit';
+import { smartMobilityCommon } from '@kit.CarKit';
 import { QgStore } from '../data/QgStore';
+import { QgModuleStore } from '../data/QgModuleStore';
 import { QgGateway } from '../data/QgGateway';
 
 const TAG: string = 'QingGuoEntry';
@@ -28,19 +30,68 @@ export default class EntryAbility extends UIAbility {
   private orienting: boolean = false;
   /** 是否已开启多窗横向模式 */
   private landscapeMultiOn: boolean = false;
-  /** 当前窗口所在屏幕 id：0=手机主屏，>0=车机虚拟屏 */
+  /** 当前窗口所在屏幕 id；超级桌面镜像形态下也可能为 0 */
   private currentDisplayId: number = 0;
+  /** Car Kit 超级桌面（流转）状态感知实例 */
+  private carAwareness: smartMobilityCommon.SmartMobilityAwareness | null = null;
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    QgModuleStore.init(this.context.filesDir);
     QgStore.getInstance().init(this.context);
+    AppStorage.setOrCreate('qgTheme', QgStore.getInstance().getTheme());
     this.applyColorMode();
     this.currentDisplayId = this.readConfigDisplayId();
-    AppStorage.setOrCreate('carMode', this.currentDisplayId > 0);
+    AppStorage.setOrCreate('carMode', this.currentDisplayId > 0 || deviceInfo.deviceType === 'car');
     AppStorage.setOrCreate('systemDark', this.isDarkMode());
     AppStorage.setOrCreate('darkMode', this.isDarkEffective());
+    // Car Kit：监听超级桌面流转状态，连接/断开瞬间立即刷新方向与铺满
+    this.listenSuperLauncher();
     // 本地媒体网关尽早启动：封面与播放地址都要经网关注入 Referer/UA
     QgGateway.ready().catch(() => {
     });
+  }
+
+  onDestroy(): void {
+    if (this.carAwareness !== null) {
+      try {
+        const types: smartMobilityCommon.SmartMobilityType[] =
+          [smartMobilityCommon.SmartMobilityType.SUPER_LAUNCHER];
+        this.carAwareness.off('smartMobilityStatus', types);
+      } catch (error) {
+        hilog.warn(0x0001, TAG, 'smartMobilityStatus 注销失败');
+      }
+      this.carAwareness = null;
+    }
+  }
+
+  /**
+   * Car Kit 超级桌面状态监听（社区官方指南）：
+   * 应用流转到车机/迁回手机时，超级桌面服务状态变化是比 displayIdChange
+   * 更直接的时机信号；此处重置铺满计数并立即刷新方向、铺满与窗口度量。
+   * 权限 ohos.permission.ACCESS_CAR_DISTRIBUTED_ENGINE（module.json5 已声明，
+   * system_grant）；不支持的设备（如 2in1）通过 canIUse 跳过。
+   */
+  private listenSuperLauncher(): void {
+    if (!canIUse('SystemCapability.CarService.DistributedEngine')) {
+      return;
+    }
+    try {
+      this.carAwareness = smartMobilityCommon.getSmartMobilityAwareness();
+      const types: smartMobilityCommon.SmartMobilityType[] =
+        [smartMobilityCommon.SmartMobilityType.SUPER_LAUNCHER];
+      const callback = (info: smartMobilityCommon.SmartMobilityInfo): void => {
+        hilog.info(0x0001, TAG,
+          `smartMobility status=${info.status} type=${info.type}`);
+        this.fillTries = 0;
+        this.syncCarOrientation();
+        this.ensureFillScreen();
+        this.syncWindowMetrics();
+      };
+      this.carAwareness.on('smartMobilityStatus', types, callback);
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.warn(0x0001, TAG, `smartMobilityStatus 注册失败 code=${err.code}`);
+    }
   }
 
   onConfigurationUpdate(newConfig: Configuration): void {
@@ -155,12 +206,46 @@ export default class EntryAbility extends UIAbility {
     win.on('displayIdChange', (id: number) => {
       hilog.info(0x0001, TAG, `displayIdChange: ${this.currentDisplayId} -> ${id}`);
       this.currentDisplayId = id;
-      AppStorage.setOrCreate('carMode', id > 0);
+      // 车机判定必须同步刷新：PlayerPage 等页面用 carMode 决定画面拉伸策略
+      AppStorage.setOrCreate('carMode', id > 0 || deviceInfo.deviceType === 'car');
       this.fillTries = 0;
       this.syncCarOrientation();
       this.ensureFillScreen();
       this.syncWindowMetrics();
     });
+  }
+
+  /**
+   * 车机/超级桌面判定。
+   * displayId 在镜像投屏时可能仍为 0，因此再结合车机设备类型、多屏和
+   * 「非全屏的宽屏桌面窗口」兜底，避免问界 M9 超级桌面漏判。
+   */
+  private isCarContext(win: window.Window, displays: display.Display[]): boolean {
+    const props: window.WindowProperties = win.getWindowProperties();
+    const windowDisplayId: number = typeof props.displayId === 'number'
+      ? props.displayId
+      : this.currentDisplayId;
+    if (deviceInfo.deviceType === 'car' || this.currentDisplayId > 0 || windowDisplayId > 0 || displays.length > 1) {
+      return true;
+    }
+
+    let activeDisplay: display.Display = display.getDefaultDisplaySync();
+    try {
+      activeDisplay = display.getDisplayByIdSync(windowDisplayId);
+    } catch (error) {
+      // 镜像场景退回默认屏幕信息
+    }
+    const displayLandscape: boolean = activeDisplay.width > activeDisplay.height;
+    const displayWidthVp: number = activeDisplay.width / Math.max(activeDisplay.densityPixels, 1);
+    const status: window.WindowStatusType = win.getWindowStatus();
+    // 超级桌面在部分车机 DPI 下宽屏 vp 会低于 960，但窗口状态仍是自由窗口。
+    // 手机横屏普通全屏为 FULL_SCREEN，不会命中；分屏也不会命中。
+    const freeformDesktop: boolean =
+      status === window.WindowStatusType.FLOATING || status === window.WindowStatusType.MAXIMIZE;
+    const desktopLike: boolean = deviceInfo.deviceType === 'phone' &&
+      displayLandscape &&
+      (freeformDesktop || displayWidthVp >= 960);
+    return desktopLike;
   }
 
   /**
@@ -179,7 +264,8 @@ export default class EntryAbility extends UIAbility {
     this.orienting = true;
     try {
       const displays: display.Display[] = await display.getAllDisplays();
-      const onCar: boolean = displays.length > 1 || deviceInfo.deviceType === 'car' || this.currentDisplayId > 0;
+      const onCar: boolean = this.isCarContext(win, displays);
+      AppStorage.setOrCreate('carMode', onCar);
       const rect: window.Rect = win.getWindowProperties().windowRect;
       const portrait: boolean = rect.height > rect.width;
 
@@ -234,14 +320,15 @@ export default class EntryAbility extends UIAbility {
    */
   private async ensureFillScreen(): Promise<void> {
     const win: window.Window | null = this.mainWindow;
-    if (win === null || this.filling || this.fillTries >= 3) {
+    if (win === null || this.filling || this.fillTries >= 3 ||
+      AppStorage.get<boolean>('playerActive') === true) {
       return;
     }
     this.filling = true;
     try {
       const before: window.Rect = win.getWindowProperties().windowRect;
       const displays: display.Display[] = await display.getAllDisplays();
-      const onCar: boolean = displays.length > 1 || deviceInfo.deviceType === 'car' || this.currentDisplayId > 0;
+      const onCar: boolean = this.isCarContext(win, displays);
       if (!onCar) {
         return;
       }
@@ -266,10 +353,36 @@ export default class EntryAbility extends UIAbility {
       if (target === null) {
         return;
       }
-      if (target.width - before.width <= 48 && target.height - before.height <= 48) {
+      const status: window.WindowStatusType = win.getWindowStatus();
+      const sizeAlreadyFull: boolean =
+        target.width - before.width <= 48 && target.height - before.height <= 48;
+      const fullScreenStatus: boolean =
+        status === window.WindowStatusType.FULL_SCREEN || status === window.WindowStatusType.MAXIMIZE;
+      if (sizeAlreadyFull && fullScreenStatus) {
         return;
       }
       this.fillTries++;
+
+      // resize/move 只在浮窗状态有效，必须在 maximize 之前完成。
+      if (status === window.WindowStatusType.FLOATING) {
+        try {
+          await win.setWindowLimits({
+            maxWidth: target.width,
+            maxHeight: target.height,
+            minWidth: Math.min(320, target.width),
+            minHeight: Math.min(320, target.height)
+          } as window.WindowLimits);
+        } catch (limitError) {
+          hilog.warn(0x0001, TAG, 'setWindowLimits 不可用');
+        }
+        try {
+          await win.resizeAsync(target.width, target.height);
+          await win.moveWindowToAsync(0, 0);
+        } catch (resizeError) {
+          hilog.warn(0x0001, TAG, '浮窗预调整被拒绝');
+        }
+      }
+
       try {
         await win.maximize(window.MaximizePresentation.ENTER_IMMERSIVE_DISABLE_TITLE_AND_DOCK_HOVER);
       } catch (maxError) {
@@ -279,27 +392,9 @@ export default class EntryAbility extends UIAbility {
           hilog.warn(0x0001, TAG, 'maximize 不可用');
         }
       }
-      let after: window.Rect = win.getWindowProperties().windowRect;
-      if (target.width - after.width > 48 || target.height - after.height > 48) {
-        try {
-          await win.setWindowLimits({
-            maxWidth: target.width,
-            maxHeight: target.height,
-            minWidth: 320,
-            minHeight: 320
-          } as window.WindowLimits);
-        } catch (limitError) {
-          hilog.warn(0x0001, TAG, 'setWindowLimits 不可用');
-        }
-        try {
-          await win.resize(target.width, target.height);
-          await win.moveWindowTo(0, 0);
-        } catch (resizeError) {
-          hilog.warn(0x0001, TAG, 'resize 被拒绝');
-        }
-        after = win.getWindowProperties().windowRect;
-      }
-      hilog.info(0x0001, TAG, `fill after=${after.width}x${after.height} target=${target.width}x${target.height}`);
+      const after: window.Rect = win.getWindowProperties().windowRect;
+      hilog.info(0x0001, TAG,
+        `fill status=${win.getWindowStatus()} rect=${after.width}x${after.height} target=${target.width}x${target.height}`);
     } catch (error) {
       hilog.warn(0x0001, TAG, '车机铺满失败');
     } finally {
@@ -346,8 +441,9 @@ export default class EntryAbility extends UIAbility {
       return;
     }
     const playerActive: boolean = AppStorage.get<boolean>('playerActive') === true;
-    const contentColor: string = this.isDarkMode() || playerActive ? '#FFFFFF' : '#17211A';
+    const contentColor: string = this.isDarkEffective() || playerActive ? '#FFFFFF' : '#0E110D';
     try {
+      // 「夜幕 · 青柠」：系统栏始终透明，让首页沉浸海报与详情背景铺到状态栏下方
       await this.mainWindow.setWindowSystemBarProperties({
         statusBarColor: '#00000000',
         navigationBarColor: '#00000000',

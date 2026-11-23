@@ -819,7 +819,7 @@ export class BeaboxSource extends QgSource {
       headers['Content-Type'] = 'application/json';
       headers['Accept'] = 'application/json';
     }
-    const resp: QgHttpResponse = await QgHttp.request(address, method, headers, payload, TIMEOUT_MS);
+    const resp: QgHttpResponse = await QgHttp.request(address, method, headers, payload, TIMEOUT_MS, 0, 30, this.id);
     if (resp.data.length > MAX_BODY_BYTES) {
       throw new Error('笔盒返回的数据过大');
     }

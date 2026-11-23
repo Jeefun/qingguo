@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-11-20T12:17:39.271Z",
+  "appVersion": "1.1.1",
+  "head": "0dbc97f3f6d64b0521522da399864520f6a7c628",
+  "gitHistoryIncluded": true,
+  "currentWorkingTreeIncluded": true,
+  "signingMaterialIncluded": true,
+  "signingFileSHA256": {
+    "qingguo.cer": "008213a593988e999d216f88266ffd21f2387dec3709305de13c51ce93f6a0fd",
+    "qingguo.p7b": "930a0e05fbbb17e65b1355b8173153796fa22bcfde36c330eff50a0df3e7787b",
+    "qingguo.p12": "cd0653f9dd087b5452cd4388c9b44f962c14fe7da775f585cd3cec318c7b21fe"
+  },
+  "signingPaths": "Project-relative .private-signing; original encrypted passwords retained",
+  "excludedRegenerableItems": [
+    ".hvigor",
+    "entry/build",
+    "entry/.cxx",
+    ".idea",
+    ".cache except required runtime/fixtures and tracked files",
+    "previous migration ZIPs"
+  ],
+  "sdkAndIdeIncluded": false,
+  "phoneSandboxIncluded": false
+}

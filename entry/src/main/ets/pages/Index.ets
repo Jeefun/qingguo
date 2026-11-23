@@ -1,10 +1,11 @@
+import { QgTheme } from '../components/QgTheme';
 ﻿/**
- * 青果APP 主框架。
+ * 青果APP 主框架 —— 「夜幕 · 青柠」。
  *
- * 结构参照真果鉴（发现 / 追剧 / 我的）：
  * - Navigation(Stack) 承载路由，目的页走系统路由表 router_map.json；
- * - 底部三页签：发现 / 追剧 / 我的，弹簧动效切换；
- * - 超级桌面流转到车机时右下角显示「车机」角标（EntryAbility 实时写入 carMode）。
+ * - 底部为悬浮墨色胶囊岛：选中项展开为青柠胶囊（图标 + 文字），其余只显示图标；
+ * - 列表下滑时胶囊岛下沉隐藏，停止滚动后浮回（qgTabBarVisible）；
+ * - 超级桌面流转到车机时，胶囊岛上方显示「车机模式」玻璃角标（EntryAbility 实时写入 carMode）。
  */
 import { curves } from '@kit.ArkUI';
 import { ExploreTab } from '../tab/ExploreTab';
@@ -26,23 +27,36 @@ class QgTabItem {
 
 const TAB_ITEMS: QgTabItem[] = [
   new QgTabItem('发现', $r('sys.symbol.house'), $r('sys.symbol.house_fill')),
-  new QgTabItem('追剧', $r('sys.symbol.heart'), $r('sys.symbol.heart_fill')),
+  new QgTabItem('片单', $r('sys.symbol.heart'), $r('sys.symbol.heart_fill')),
   new QgTabItem('我的', $r('sys.symbol.person'), $r('sys.symbol.person_fill'))
 ];
 
 @Entry
 @Component
 struct Index {
+  @StorageProp('qgTheme') themeId: string = 'lime';
   pathStack: NavPathStack = new NavPathStack();
   @State tabIdx: number = 0;
   @State barPressed: number = -1;
   @StorageProp('safeBottom') safeBottom: number = 0;
+  @StorageProp('screenWidth') screenWidth: number = 0;
   @StorageProp('carMode') carOn: boolean = false;
+  @StorageProp('qgTabBarVisible') tabBarVisible: boolean = true;
+  @StorageProp('darkMode') darkOn: boolean = false;
   private tabController: TabsController = new TabsController();
+
+  aboutToAppear(): void {
+    AppStorage.setOrCreate('qgTabBarVisible', true);
+  }
+
+  private selectTab(idx: number): void {
+    this.tabController.changeIndex(idx);
+    this.tabIdx = idx;
+  }
 
   build() {
     Navigation(this.pathStack) {
-      Column() {
+      Stack({ alignContent: Alignment.Bottom }) {
         Tabs({ controller: this.tabController, index: this.tabIdx }) {
           TabContent() {
             ExploreTab({ stack: this.pathStack })
@@ -56,9 +70,12 @@ struct Index {
         }
         .barHeight(0)
         .scrollable(false)
-        .layoutWeight(1)
+        .animationDuration(0)
+        .width('100%')
+        .height('100%')
         .onChange((index: number) => {
           this.tabIdx = index;
+          AppStorage.setOrCreate('qgTabBarVisible', true);
         })
 
         this.TabBarBuilder()
@@ -68,61 +85,105 @@ struct Index {
     }
     .hideTitleBar(true)
     .mode(NavigationMode.Stack)
-    .backgroundColor($r('app.color.bg'))
+    .backgroundColor(QgTheme.color('bg', this.themeId, this.darkOn))
+    // 窗口已 setWindowLayoutFullScreen(true)；Navigation 不再二次避让状态栏，由各页面自行补 safeTop
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
+  }
+
+  /** 胶囊岛宽度：手机按屏宽留边，平板 / 车机限制最大宽度居中 */
+  private barWidth(): string | number {
+    if (this.screenWidth >= 600) {
+      return 360;
+    }
+    return '100%';
   }
 
   @Builder
   TabBarBuilder() {
-    Stack({ alignContent: Alignment.TopEnd }) {
-      Row() {
-        ForEach(TAB_ITEMS, (item: QgTabItem, idx: number) => {
-          Column({ space: 3 }) {
-            SymbolGlyph(this.tabIdx === idx ? item.iconActive : item.iconNormal)
-              .fontSize(24)
-              .fontColor([this.tabIdx === idx ? $r('app.color.accent') : $r('app.color.textFaint')])
-            Text(item.label)
-              .fontSize(11)
-              .fontColor(this.tabIdx === idx ? $r('app.color.accent') : $r('app.color.textFaint'))
-              .fontWeight(this.tabIdx === idx ? FontWeight.Medium : FontWeight.Normal)
-          }
-          .flexShrink(1)
-          .flexGrow(1)
-          .padding({ top: 8, bottom: 4 })
-          .scale({
-            x: this.tabIdx === idx ? (this.barPressed === idx ? 0.92 : 1.06) : 1,
-            y: this.tabIdx === idx ? (this.barPressed === idx ? 0.92 : 1.06) : 1
-          })
-          .animation({ duration: 300, curve: curves.springMotion(0.42, 0.72) })
-          .onClick(() => {
-            if (this.tabIdx !== idx) {
-              this.tabController.changeIndex(idx);
-              this.tabIdx = idx;
-            }
-          })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.barPressed = idx;
-            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-              this.barPressed = -1;
-            }
-          })
-        }, (item: QgTabItem, idx: number) => `${item.label}_${idx}`)
-      }
-      .width('100%')
-      .padding({ bottom: this.safeBottom })
-      .backgroundColor($r('app.color.surface'))
-      .border({ width: { top: 0.5 }, color: $r('app.color.border') })
-
+    Column({ space: 10 }) {
       if (this.carOn) {
-        Text('车机')
-          .fontSize(10)
-          .fontColor($r('app.color.accentOn'))
-          .backgroundColor($r('app.color.accent'))
-          .borderRadius(8)
-          .padding({ left: 7, right: 7, top: 3, bottom: 3 })
-          .margin(10)
+        Row({ space: 6 }) {
+          Row().width(6).height(6).borderRadius(3).backgroundColor(QgTheme.color('accent', this.themeId, this.darkOn))
+          Text('车机模式').fontSize(11).fontWeight(FontWeight.Medium).fontColor(QgTheme.color('text', this.themeId, true))
+        }
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .borderRadius(14)
+        .backgroundColor(QgTheme.color('tabBarBg', this.themeId, this.darkOn))
       }
+
+      Stack() {
+        // 极轻玻璃高光棱线（不遮挡背后透光）
+        Row()
+          .width('100%')
+          .height('100%')
+          .borderRadius(32)
+          .linearGradient({
+            direction: GradientDirection.Bottom,
+            colors: this.darkOn
+              ? [['#1AFFFFFF', 0], ['#00FFFFFF', 0.35], ['#08FFFFFF', 1]]
+              : [['#24FFFFFF', 0], ['#00FFFFFF', 0.35], ['#0DFFFFFF', 1]]
+          })
+          .hitTestBehavior(HitTestMode.None)
+
+        Row() {
+          ForEach(TAB_ITEMS, (item: QgTabItem, idx: number) => {
+            this.TabItemBuilder(item, idx)
+          }, (item: QgTabItem) => item.label)
+        }
+        .width('100%')
+        .height('100%')
+        .padding(7)
+      }
+      .width(this.barWidth())
+      .height(64)
+      .borderRadius(32)
+      .clip(true)
+      .backgroundColor(Color.Transparent)
+      .backgroundEffect({
+        radius: 16,
+        saturation: 1.7,
+        brightness: 1.0,
+        color: this.darkOn ? '#12000000' : '#08FFFFFF'
+      })
+      .border({ width: 0.8, color: this.darkOn ? '#4DFFFFFF' : '#CCFFFFFF' })
+      .shadow({ radius: 24, color: '#24000000', offsetX: 0, offsetY: 8 })
     }
     .width('100%')
+    .padding({ left: 20, right: 20, bottom: this.safeBottom + 12 })
+    .translate({ y: this.tabBarVisible ? 0 : 120 })
+    .opacity(this.tabBarVisible ? 1 : 0)
+    .hitTestBehavior(this.tabBarVisible ? HitTestMode.Default : HitTestMode.None)
+    .animation({ duration: 260, curve: curves.springMotion(0.38, 0.85) })
+  }
+
+  @Builder
+  TabItemBuilder(item: QgTabItem, idx: number) {
+    Row({ space: 8 }) {
+      SymbolGlyph(this.tabIdx === idx ? item.iconActive : item.iconNormal)
+        .fontSize(21)
+        .fontColor([this.tabIdx === idx ? QgTheme.color('accentOn', this.themeId, this.darkOn) :
+          QgTheme.color('text', this.themeId, this.darkOn)])
+      if (this.tabIdx === idx) {
+        Text(item.label)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(QgTheme.color('accentOn', this.themeId, this.darkOn))
+          .maxLines(1)
+          .transition(TransitionEffect.OPACITY.animation({ duration: 180 }))
+      }
+    }
+    .layoutWeight(this.tabIdx === idx ? 1.6 : 1)
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .borderRadius(24)
+    .backgroundColor(this.tabIdx === idx ? QgTheme.color('accent', this.themeId, this.darkOn) : Color.Transparent)
+    .scale({ x: this.barPressed === idx ? 0.92 : 1, y: this.barPressed === idx ? 0.92 : 1 })
+    .animation({ duration: 320, curve: curves.springMotion(0.4, 0.8) })
+    .accessibilityText(item.label)
+    .accessibilitySelected(this.tabIdx === idx)
+    .onClick(() => this.selectTab(idx))
+    .onTouch((event: TouchEvent) => {
+      this.barPressed = event.type === TouchType.Down ? idx : -1;
+    })
   }
 }

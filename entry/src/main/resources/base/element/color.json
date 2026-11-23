@@ -1,39 +1,164 @@
 {
   "color": [
-    { "name": "start_window_background", "value": "#F4F8F2" },
-
-    { "name": "bg", "value": "#F4F8F2" },
-    { "name": "surface", "value": "#FFFFFF" },
-    { "name": "surfaceHigh", "value": "#EDF3E8" },
-    { "name": "border", "value": "#E2EADD" },
-    { "name": "divider", "value": "#EBF1E6" },
-
-    { "name": "text", "value": "#17211A" },
-    { "name": "textDim", "value": "#5F6E64" },
-    { "name": "textFaint", "value": "#9AA89D" },
-
-    { "name": "accent", "value": "#12A450" },
-    { "name": "accentOn", "value": "#FFFFFF" },
-    { "name": "accentSoft", "value": "#E5F6EA" },
-    { "name": "accentDim", "value": "#C9EEDA" },
-    { "name": "brandStart", "value": "#10B981" },
-    { "name": "brandEnd", "value": "#84CC16" },
-
-    { "name": "chipBg", "value": "#EDF3E8" },
-    { "name": "chipOn", "value": "#12A450" },
-    { "name": "glass", "value": "#B3FFFFFF" },
-    { "name": "gold", "value": "#E8A23C" },
-    { "name": "rankOne", "value": "#E85D3C" },
-    { "name": "rankTwo", "value": "#E8A23C" },
-    { "name": "rankThree", "value": "#3C9BE8" },
-
-    { "name": "mask", "value": "#66000000" },
-    { "name": "detailScrim", "value": "#B3F4F8F2" },
-    { "name": "scrimTop", "value": "#B3000000" },
-    { "name": "scrimBottom", "value": "#00000000" },
-    { "name": "playerBg", "value": "#0B0F0D" },
-    { "name": "playerText", "value": "#F2F6F0" },
-    { "name": "playerDim", "value": "#9DB0A3" },
-    { "name": "trackOff", "value": "#33FFFFFF" }
+    {
+      "name": "start_window_background",
+      "value": "#F3F4EF"
+    },
+    {
+      "name": "bg",
+      "value": "#F3F4EF"
+    },
+    {
+      "name": "surface",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "surfaceHigh",
+      "value": "#E8EAE3"
+    },
+    {
+      "name": "border",
+      "value": "#D6D9CF"
+    },
+    {
+      "name": "divider",
+      "value": "#E2E4DC"
+    },
+    {
+      "name": "text",
+      "value": "#0E110D"
+    },
+    {
+      "name": "textDim",
+      "value": "#4F554C"
+    },
+    {
+      "name": "textFaint",
+      "value": "#686E64"
+    },
+    {
+      "name": "accent",
+      "value": "#C6F24E"
+    },
+    {
+      "name": "accentOn",
+      "value": "#0B0F05"
+    },
+    {
+      "name": "accentSoft",
+      "value": "#E6F4C4"
+    },
+    {
+      "name": "accentDim",
+      "value": "#7FA51C"
+    },
+    {
+      "name": "accentInk",
+      "value": "#466A00"
+    },
+    {
+      "name": "brandStart",
+      "value": "#D9FF66"
+    },
+    {
+      "name": "brandEnd",
+      "value": "#8FD43A"
+    },
+    {
+      "name": "chipBg",
+      "value": "#E8EAE3"
+    },
+    {
+      "name": "chipOn",
+      "value": "#0E110D"
+    },
+    {
+      "name": "glass",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "glassBg",
+      "value": "#59FFFFFF"
+    },
+    {
+      "name": "glassStroke",
+      "value": "#80FFFFFF"
+    },
+    {
+      "name": "gold",
+      "value": "#9A6A12"
+    },
+    {
+      "name": "rankOne",
+      "value": "#466A00"
+    },
+    {
+      "name": "rankTwo",
+      "value": "#9A6A12"
+    },
+    {
+      "name": "rankThree",
+      "value": "#4F554C"
+    },
+    {
+      "name": "mask",
+      "value": "#99000000"
+    },
+    {
+      "name": "detailScrim",
+      "value": "#E6F3F4EF"
+    },
+    {
+      "name": "scrimTop",
+      "value": "#B3000000"
+    },
+    {
+      "name": "scrimBottom",
+      "value": "#00000000"
+    },
+    {
+      "name": "heroTop",
+      "value": "#CCF3F4EF"
+    },
+    {
+      "name": "bgClear",
+      "value": "#00F3F4EF"
+    },
+    {
+      "name": "tabBarBg",
+      "value": "#8C121511"
+    },
+    {
+      "name": "tabIconOff",
+      "value": "#9AA096"
+    },
+    {
+      "name": "danger",
+      "value": "#D23F31"
+    },
+    {
+      "name": "playerBg",
+      "value": "#000000"
+    },
+    {
+      "name": "playerText",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "playerDim",
+      "value": "#C9CEC4"
+    },
+    {
+      "name": "trackOff",
+      "value": "#4DFFFFFF"
+    },
+    {
+      "name": "navBg",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "playerControl",
+      "value": "#99101210"
+    }
   ]
 }

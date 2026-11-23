@@ -904,7 +904,7 @@ async function lgFetchProviderText(rawURL: string, referer: string): Promise<str
     };
     let resp: QgHttpResponse;
     try {
-      resp = await QgHttp.request(rawURL, 'GET', headers, null, LG_TIMEOUT_MS);
+      resp = await QgHttp.request(rawURL, 'GET', headers, null, LG_TIMEOUT_MS, 0, 30, 'cloudfront');
     } catch (error) {
       lastError = error as Error;
       continue;
@@ -996,7 +996,7 @@ function lgParseProtocol(script: string): string[] {
 /** Go probeAPIHost：4s 探活 /api/app/ping/check */
 async function lgProbeApiHost(host: string): Promise<void> {
   const resp: QgHttpResponse = await QgHttp.request(`${host}/api/app/ping/check`, 'GET',
-    { 'User-Agent': LG_UA }, null, LG_PROBE_TIMEOUT_MS);
+    { 'User-Agent': LG_UA }, null, LG_PROBE_TIMEOUT_MS, 0, 30, 'cloudfront');
   if (resp.status !== 200) {
     throw new Error(`API 健康检查失败（HTTP ${resp.status}）`);
   }
@@ -1093,7 +1093,7 @@ async function lgRequest(method: string, apiPath: string, params: Object | null)
     }
     let resp: QgHttpResponse;
     try {
-      resp = await QgHttp.request(`${base}${fullPath}`, method, headers, requestBody, LG_TIMEOUT_MS);
+      resp = await QgHttp.request(`${base}${fullPath}`, method, headers, requestBody, LG_TIMEOUT_MS, 0, 30, 'cloudfront');
     } catch (error) {
       lastError = error as Error;
       lgResetApiEndpoint(base);

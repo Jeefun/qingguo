@@ -28,6 +28,16 @@ export class QgHttpProxy {
 export class QgHttp {
   /** 全局代理配置；enabled 时走指定代理，否则走系统默认 */
   static proxy: QgHttpProxy = new QgHttpProxy();
+  /** 按站源解析代理（由 QgStore 注册）：返回该站源的生效代理，无覆盖时回落全局 */
+  static proxyResolver: ((sourceId: string) => QgHttpProxy) | null = null;
+
+  /** 解析某站源的生效代理；无注册解析器或无覆盖时即全局代理 */
+  static resolveProxy(sourceId: string): QgHttpProxy {
+    if (sourceId.length > 0 && QgHttp.proxyResolver !== null) {
+      return QgHttp.proxyResolver(sourceId);
+    }
+    return QgHttp.proxy;
+  }
 
   private static methodOf(method: string): http.RequestMethod {
     if (method === 'POST') {
@@ -52,9 +62,11 @@ export class QgHttp {
    * @param headers 请求头
    * @param body    请求体（可空）
    * @param timeoutMs 连接/读取超时（毫秒）
+   * @param sourceId 站源 ID（可选）：有按站源代理覆盖时使用该站源的代理
    */
   static async request(url: string, method: string, headers: Record<string, string>,
-    body: Uint8Array | null, timeoutMs: number): Promise<QgHttpResponse> {
+    body: Uint8Array | null, timeoutMs: number, maxBytes: number = 0, maxRedirects: number = 30,
+    sourceId: string = ''): Promise<QgHttpResponse> {
     const client: http.HttpRequest = http.createHttp();
     const started: number = Date.now();
     try {
@@ -64,9 +76,13 @@ export class QgHttp {
         expectDataType: http.HttpDataType.ARRAY_BUFFER,
         usingCache: false,
         connectTimeout: timeoutMs,
-        readTimeout: timeoutMs
+        readTimeout: timeoutMs,
+        maxRedirects: maxRedirects
       };
-      const proxy: QgHttpProxy = QgHttp.proxy;
+      if (maxBytes > 0) {
+        options.maxLimit = maxBytes;
+      }
+      const proxy: QgHttpProxy = QgHttp.resolveProxy(sourceId);
       if (proxy.enabled && proxy.host.length > 0 && proxy.port > 0) {
         const hp: connection.HttpProxy = {
           host: proxy.host,
@@ -82,12 +98,15 @@ export class QgHttp {
       const result: QgHttpResponse = new QgHttpResponse();
       result.status = resp.responseCode;
       const raw: string | Object | ArrayBuffer = resp.result;
-      if (raw instanceof ArrayBuffer) {
+      if (raw === undefined || raw === null) {
+        result.data = new Uint8Array(0);
+      } else if (raw instanceof ArrayBuffer) {
         result.data = new Uint8Array(raw);
       } else if (typeof raw === 'string') {
         result.data = qgUtf8Encode(raw);
       } else {
-        result.data = qgUtf8Encode(JSON.stringify(raw));
+        const serialized: string | undefined = JSON.stringify(raw);
+        result.data = serialized !== undefined ? qgUtf8Encode(serialized) : new Uint8Array(0);
       }
       const rawHeader: Record<string, string> =
         JSON.parse(JSON.stringify(resp.header)) as Record<string, string>;
@@ -110,15 +129,15 @@ export class QgHttp {
 
   /** GET 文本 */
   static async getText(url: string, headers: Record<string, string>,
-    timeoutMs: number): Promise<string> {
-    const resp: QgHttpResponse = await QgHttp.request(url, 'GET', headers, null, timeoutMs);
+    timeoutMs: number, sourceId: string = ''): Promise<string> {
+    const resp: QgHttpResponse = await QgHttp.request(url, 'GET', headers, null, timeoutMs, 0, 30, sourceId);
     return resp.text();
   }
 
   /** GET 字节 */
   static async getBytes(url: string, headers: Record<string, string>,
-    timeoutMs: number): Promise<Uint8Array> {
-    const resp: QgHttpResponse = await QgHttp.request(url, 'GET', headers, null, timeoutMs);
+    timeoutMs: number, sourceId: string = ''): Promise<Uint8Array> {
+    const resp: QgHttpResponse = await QgHttp.request(url, 'GET', headers, null, timeoutMs, 0, 30, sourceId);
     return resp.data;
   }
 }

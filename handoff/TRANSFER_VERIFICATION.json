@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-11-20T20:26:04.6900942+08:00",
+  "appVersion": "1.1.1",
+  "gitHead": "0dbc97f3f6d64b0521522da399864520f6a7c628",
+  "relocatedWorkingTreeVerified": true,
+  "sourceFilesCompared": 138,
+  "testScriptsPassed": 14,
+  "arkTsBuildPassed": true,
+  "nativeArm64BuildPassed": true,
+  "hapSigningPassed": true,
+  "buildEnvironment": "Windows PowerShell 5.1; DevEco Studio 26.0.0.865; HarmonyOS SDK API 26 / 26.0.0.105",
+  "signingFilesIdentical": 3,
+  "passwordMaterialFilesIdentical": 5,
+  "encryptedPasswordsPreserved": true,
+  "signingPaths": "project-relative .private-signing",
+  "originalGlobalSigningFilesModified": false,
+  "otherPhysicalComputerTested": false,
+  "phoneTested": false,
+  "limitations": [
+    "Destination must install compatible DevEco Studio / SDK",
+    "Existing debug-profile device authorization and expiry still apply",
+    "Phone sandbox data is not included"
+  ]
+}

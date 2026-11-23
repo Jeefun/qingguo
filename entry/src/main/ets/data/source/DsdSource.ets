@@ -1661,7 +1661,7 @@ export class DsdSource extends QgSource {
       'Referer': referer,
       'Accept-Language': 'zh-CN,zh;q=0.9'
     };
-    const resp: QgHttpResponse = await QgHttp.request(address, 'GET', headers, null, DSD_TIMEOUT_MS);
+    const resp: QgHttpResponse = await QgHttp.request(address, 'GET', headers, null, DSD_TIMEOUT_MS, 0, 30, this.id);
     if (resp.data.length > DSD_MAX_TEXT_BYTES) {
       throw new Error('帝果返回的数据过大');
     }
