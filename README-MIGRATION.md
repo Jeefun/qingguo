@@ -18,7 +18,7 @@ powershell -ExecutionPolicy Bypass -File .\handoff\Setup-Project.ps1 -DevEcoHome
 powershell -ExecutionPolicy Bypass -File .\handoff\Build-Project.ps1
 ```
 
-第一条在首次设置或编辑前核对解压文件；设置脚本保存本机 IDE 路径，构建脚本读取该路径，运行全部 14 项测试后编译、打包并签名。若 SDK 不在 IDE 的 `sdk` 子目录，首次设置时加 `-SdkHome "E:\HarmonySDK"`，该目录下应有 `default\openharmony`。
+第一条在首次设置或编辑前核对解压文件；设置脚本保存本机 IDE 路径，构建脚本读取该路径，运行全部 21 项测试后编译、打包并签名。若 SDK 不在 IDE 的 `sdk` 子目录，首次设置时加 `-SdkHome "E:\HarmonySDK"`，该目录下应有 `default\openharmony`。
 
 4. 用 DevEco 打开整个项目根目录继续编码。若依赖同步提示更新，先保留现有版本；确需重新安装依赖，可运行：
 
@@ -48,7 +48,7 @@ entry/build/default/outputs/default/entry-default-signed.hap
 
 ## 包含与排除
 
-- 包含当前项目工作区、源码资源、C/C++ QuickJS、两级包清单和锁文件、Git 历史、UI 设计文档与实验目录、原有 `dist` 文件、14 项测试及其所需离线依赖。
+- 包含当前项目工作区、源码资源、C/C++ QuickJS、两级包清单和锁文件、Git 历史、UI 设计文档与实验目录、原有 `dist` 文件、21 项测试及其所需离线依赖。
 - `.cache/module-html-runtime` 和 `.cache/module-work` 为测试所需，已保留，不能把整个 `.cache` 删掉后直接声称测试可运行。
 - 不携带可重新生成且绑定旧路径的 `.hvigor`、`entry/build`、`.cxx`、IDE 工作区、旧截图/调试缓存和本次打包临时目录；保留的 Git 历史不会因此被裁剪。精确排除规则见 `handoff/create-stage.cjs`。
 - 不包含手机应用沙箱中的 Preferences、观看记录、已安装站源状态；这些数据仍在手机上，开发电脑迁移不会自动导出它们。
@@ -56,6 +56,6 @@ entry/build/default/outputs/default/entry-default-signed.hap
 
 ## 验证边界
 
-交付前会在全新迁移目录运行设置、14 项测试、完整 HAP 构建和签名，并核对 ZIP 的每个文件、Git 历史和签名材料。实际结果写入 `handoff/TRANSFER_VERIFICATION.json`。
+交付前会在全新迁移目录运行设置、21 项测试、完整 HAP 构建和签名，并核对 ZIP 的每个文件、Git 历史和签名材料。实际结果写入 `handoff/TRANSFER_VERIFICATION.json`。
 
 这验证了换路径后的项目可恢复构建，不等于已经在另一台物理电脑或手机执行。新电脑仍需安装匹配的 DevEco/SDK，设备仍需有效调试授权。1.1.1 分季版本尚无本次目标手机实测记录。

@@ -4,14 +4,14 @@
 
 “青果”是原生 HarmonyOS 短剧 App，采用 ArkUI/ArkTS、Navigation 和系统 Video，含 C++/N-API 隔离模块运行时。它不是 Android 或 Flutter 项目。用户要求保留名称、功能和数据，已经做过整套 UI 重构；随后要求在线站源商店、Android 播放核心同步及分季移植。最近的分季功能已经实现，当前任务是把可继续开发的完整工作区连同签名交付到另一台电脑。
 
-应用版本 `1.1.1`、versionCode `1001001`，包名 `com.fengjie.qingguo`。记录的 Android 正式版基线是 `Xanerix/guoapp` 的 `app-v2.0.2-114`（`2.0.2+114`），红果内置站源同步至 `1.0.6`。不要未经查验就称为上游“最新版”；这是快照中的同步基线，不表示 Android 所有功能均已移植。
+应用版本 `1.1.1`、versionCode `1001001`，包名 `com.fengjie.qingguo`。记录的 Android 正式版基线是 `Xanerix/guoapp` 的 `app-v2.0.2-114`（`2.0.2+114`），红果内置站源同步至 `1.0.7`。不要未经查验就称为上游“最新版”；这是快照中的同步基线，不表示 Android 所有功能均已移植。
 
 先读根目录 `README-MIGRATION.md` 并运行 `handoff/Setup-Project.ps1 -DevEcoHome <实际路径>`，再运行 `handoff/Build-Project.ps1`。入口脚本按 Windows 环境编写。
 
 ## 仓库状态必须保留
 
-- 包内包含 `.git` 和当前工作区，HEAD 是 `0dbc97f`。当前没有配置 Git remote。
-- 最新 UI、在线模块、分季和大量修复主要处于未提交/未跟踪状态；不应只看 HEAD 或 Git 已跟踪文件。不要 `reset --hard`、`clean -fd` 或用旧提交覆盖当前工作区。
+- 包内包含 `.git` 和当前工作区，`origin` 指向 `https://github.com/Jeefun/qingguo`。2026-11-24 已将工作区同步到 `d84b2c7`（`9b3a600` 原生模块引擎/AVSession 后台音频/CENC 流式修复 + `d84b2c7` 项目 README），本地与 `origin/master` 一致。
+- 后续编辑完成并验证后提交并推送到 `origin/master`。不要 `reset --hard`、`clean -fd` 或用旧提交覆盖当前工作区。
 - 迁移包将 `build-profile.json5` 的签名路径改为项目内相对路径，保留原加密密码。除此之外迁移改动集中在测试路径、脚本和说明，不改变 App 功能。
 - `.private-signing/` 是真实签名材料，已经忽略；不要打印密码、私钥，不要上传公开仓库。该目录必须与当前加密密码配套。不要覆盖新机器全局签名配置。
 
@@ -59,12 +59,12 @@
 
 已验证环境：DevEco Studio `26.0.0.865`，SDK `API 26 / 26.0.0.105`，Hvigor/OHOS plugin `6.26.9`，OHPM `26.0.0.630`，Node `24.14.1`，SDK CMake `3.28.2`、Clang `15.0.4`，TypeScript `4.9.5`。QuickJS 源码版本 `2026-06-04` 已随项目携带。目标 SDK `26.0.0`，兼容配置 `6.1.1(24)`，C++17，产物 arm64。
 
-`node scripts/run-tests.cjs` 顺序运行 14 项测试并在失败时停止。13 项测试通过共享 `load-typescript.cjs` 从 `DEVECO_STUDIO_HOME` 加载 TS，也支持 `QG_TYPESCRIPT_PATH`；不再要求原 D 盘安装位置。运行时测试依赖 `.cache/module-html-runtime/node_modules/quickjs-emscripten` 及 `.cache/module-work/*-main.js`，已随包携带，不能一概删掉 `.cache`。
+`node scripts/run-tests.cjs` 顺序运行 21 项测试并在失败时停止。多数测试通过共享 `load-typescript.cjs` 从 `DEVECO_STUDIO_HOME` 加载 TS，也支持 `QG_TYPESCRIPT_PATH`；不要求原 D 盘安装位置。运行时测试依赖 `.cache/module-html-runtime/node_modules/quickjs-emscripten` 及 `.cache/module-work/*-main.js`，已随包携带，不能一概删掉 `.cache`。
 
-测试范围包括站源存储、模块接口/宿主/仓库激活、QuickJS-WASM 隔离、网关、红果 1.0.6/旧接口/注册/V5、播放器重试、分季数据、详情和播放器。Node 测试替换了鸿蒙接口；WASM 不等同于 N-API 真机执行。
+测试范围包括站源存储、模块接口/宿主/仓库激活、QuickJS-WASM 隔离、网关、红果 1.0.7/旧接口/注册/V5、播放器重试、分季数据、详情和播放器、音频后台模式、选集组件、发现页泳道、站源代理、赞助声明与主题。Node 测试替换了鸿蒙接口；WASM 不等同于 N-API 真机执行。
 
-当前 1.1.1 已通过 ArkTS、原生模块构建、HAP 签名和 14 项电脑端测试；迁移目录验证结果见 `TRANSFER_VERIFICATION.json`。**1.1.1 未在本次目标手机上实测。** 用户之前要求打包后到另一台电脑安装，不要声称已完成真机检查。
+当前 1.1.1 已通过 ArkTS、原生模块构建、HAP 签名和 21 项电脑端测试；迁移目录验证结果见 `TRANSFER_VERIFICATION.json`。**1.1.1 未在本次目标手机上实测。** 用户之前要求打包后到另一台电脑安装，不要声称已完成真机检查。
 
 建议下次真机验证：覆盖安装保留数据；商店安装/更新/切换/重启/移除；真实站源浏览与播放；手动切季续播；末集跨季；关闭自动连播；快速切季、弱网失败；横竖屏、沉浸状态栏和弹幕。
 
-账号、榜单、设备管理等其他 Android 可选界面未完整移植。项目迁移不包含手机沙箱内实际观看数据和已装模块状态；不要将源码包等同于手机数据备份。最新安装和功能说明见 `dist/qingguo-1.1.1-README.md`，第三方许可见 `dist/THIRD_PARTY_NOTICES.txt`。
+Android 业务差异复核清单见 `handoff/BUSINESS_PARITY_AUDIT.md`。账号、榜单、设备管理、完整下载/已下载播放管理、备份恢复、多用户/权限、追剧更新、投屏/后台媒体控制、内置红果听书/小说、搜索联想与直接点剧播放流程等 Android 可选界面未完整移植；详情反馈按钮目前仍是占位。部分站源访问限制另见审计表。项目迁移不包含手机沙箱内实际观看数据和已装模块状态；不要将源码包等同于手机数据备份。最新安装和功能说明见 `dist/qingguo-1.1.1-README.md`，第三方许可见 `dist/THIRD_PARTY_NOTICES.txt`。
