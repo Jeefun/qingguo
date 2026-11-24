@@ -1,19 +1,17 @@
 import { QgTheme, QgThemeOption } from '../components/QgTheme';
-﻿/**
+/**
  * 设置页 —— 「夜幕 · 青柠」。
  *
- * - 顶部返回 + 大标题 + QgSegmented 分类导航（外观 / 播放 / 片库 / 更多）；
- * - 外观提供深浅双景主题画廊；片库使用两列卡片网格（当前源主题色实底）；
+ * - 顶部返回 + 大标题 + QgSegmented 分类导航（外观 / 播放 / 更多）；
+ * - 外观提供深浅双景主题画廊；
  * - 保留代理配置、数据清空等全部原有逻辑。
  */
 import { curves, promptAction } from '@kit.ArkUI';
 import { ConfigurationConstant, OpenLinkOptions, common } from '@kit.AbilityKit';
-import { QgAppSettings, QgSourceDesc, QgSourceGroupInfo, QgSourceProxy, qgSourceDescOf, qgSourceGroups } from '../model/QgModels';
-import { QgRepository } from '../data/QgRepository';
+import { QgAppSettings } from '../model/QgModels';
 import { QgStore } from '../data/QgStore';
 import { QG_VERSION, QG_ANDROID_BASE } from '../data/QgVersion';
-import { QgModuleEntry, QgModulePackage, QgModuleStore } from '../data/QgModuleStore';
-import { QgGhostButton, QgPrimaryButton, QgSegmented, QgTopBar, QgUi } from '../components/QgWidgets';
+import { QgSegmented, QgTopBar, QgUi } from '../components/QgWidgets';
 
 class QgModeOption {
   value: string = '';
@@ -31,24 +29,6 @@ const MODE_OPTIONS: QgModeOption[] = [
   new QgModeOption('dark', '深色')
 ];
 
-/** 按站源代理设置行的可编辑副本（设置页内编辑，persistSettings 时回写） */
-class QgSourceProxyRow {
-  id: string = '';
-  name: string = '';
-  /** follow=跟随全局 | direct=直连 | manual=手动代理 */
-  mode: string = 'follow';
-  host: string = '';
-  port: number = 7890;
-
-  constructor(id: string, name: string, mode: string, host: string, port: number) {
-    this.id = id;
-    this.name = name;
-    this.mode = mode;
-    this.host = host;
-    this.port = port;
-  }
-}
-
 @Component
 struct QgSettingsPage {
   @StorageProp('qgTheme') themeId: string = 'lime';
@@ -64,94 +44,13 @@ struct QgSettingsPage {
   @State proxyOn: boolean = false;
   @State proxyHost: string = '';
   @State proxyPort: number = 7890;
-  @State sourceProxyRows: QgSourceProxyRow[] = [];
   @State homeContinue: boolean = true;
   @State homeRank: boolean = true;
   @State homeRecommendations: boolean = true;
   @StorageProp('safeTop') safeTop: number = 0;
   @StorageProp('safeBottom') safeBottom: number = 0;
   @StorageProp('screenWidth') screenWidth: number = 0;
-  @State moduleEntries: QgModuleEntry[] = [];
-  @State moduleBusy: boolean = false;
-  @State moduleStatus: string = '点击刷新读取线上站源';
-  @State installedModules: QgModulePackage[] = [];
-  @State sourceDescriptions: QgSourceDesc[] = [];
-  @State moduleFilter: number = 0;
 
-  private reloadSources(): void {
-    this.installedModules = QgModuleStore.installed();
-    this.sourceDescriptions = QgRepository.descriptions();
-    this.sourceId = QgRepository.currentSourceId();
-    this.moduleEntries = this.moduleEntries.map((item: QgModuleEntry): QgModuleEntry => {
-      item.installedVersion = this.installedModules.find((pkg: QgModulePackage): boolean =>
-        pkg.manifest.id === item.id)?.manifest.version ?? '';
-      return item;
-    });
-  }
-
-  private async refreshModuleStore(): Promise<void> {
-    if (this.moduleBusy) return;
-    this.moduleBusy = true;
-    try {
-      this.moduleEntries = await QgModuleStore.index();
-      const updates: number = this.moduleEntries.filter((item: QgModuleEntry): boolean => item.hasUpdate()).length;
-      this.moduleStatus = `${this.moduleEntries.length} 个线上站源${updates > 0 ? ` · ${updates} 个可更新` : ''}`;
-    } catch (error) {
-      this.moduleStatus = error instanceof Error ? error.message : `${error}`;
-    }
-    this.moduleBusy = false;
-  }
-
-  private async installModule(item: QgModuleEntry): Promise<void> {
-    if (this.moduleBusy) return;
-    this.moduleBusy = true;
-    try {
-      this.moduleStatus = `正在安装 ${item.name} ${item.version}`;
-      await QgRepository.installModule(item);
-      this.reloadSources();
-      this.moduleStatus = `${item.name} ${item.version} 已安装生效`;
-    } catch (error) {
-      this.moduleStatus = error instanceof Error ? error.message : `${error}`;
-    }
-    this.moduleBusy = false;
-  }
-
-  private async updateModules(): Promise<void> {
-    if (this.moduleBusy) return;
-    this.moduleBusy = true;
-    const failures: string[] = [];
-    let count: number = 0;
-    for (const entry of this.moduleEntries.filter((item: QgModuleEntry): boolean => item.hasUpdate())) {
-      try {
-        this.moduleStatus = `正在更新 ${entry.name}`;
-        await QgRepository.installModule(entry);
-        count++;
-      } catch (error) {
-        failures.push(`${entry.name}: ${error instanceof Error ? error.message : error}`);
-      }
-    }
-    this.reloadSources();
-    this.moduleStatus = failures.length ? `已更新 ${count} 个；${failures.join('；')}` : `已更新 ${count} 个站源`;
-    this.moduleBusy = false;
-  }
-
-  private restoreModule(pkg: QgModulePackage): void {
-    if (this.moduleBusy) return;
-    AlertDialog.show({
-      title: `移除 ${pkg.manifest.name} 在线版本？`,
-      message: '观看记录和片单保留；有内置版本的站源将恢复内置版本。',
-      primaryButton: { value: '取消', action: (): void => {} },
-      secondaryButton: { value: '移除', action: (): void => {
-        try {
-          QgRepository.restoreModule(pkg.manifest.id);
-          this.reloadSources();
-          this.moduleStatus = '已移除在线版本';
-        } catch (error) {
-          this.moduleStatus = error instanceof Error ? error.message : `${error}`;
-        }
-      } }
-    });
-  }
   private persistSettings(): void {
     const cur: QgAppSettings = QgStore.getInstance().getSettings();
     const s: QgAppSettings = new QgAppSettings();
@@ -172,7 +71,6 @@ struct QgSettingsPage {
     s.proxyOn = this.proxyOn;
     s.proxyHost = this.proxyHost;
     s.proxyPort = this.proxyPort;
-    s.sourceProxies = this.buildSourceProxies();
     s.homeContinue = this.homeContinue;
     s.homeRank = this.homeRank;
     s.homeRecommendations = this.homeRecommendations;
@@ -199,16 +97,6 @@ struct QgSettingsPage {
     }
   }
 
-  private selectSource(id: string): void {
-    if (id === this.sourceId) {
-      return;
-    }
-    QgRepository.setSource(id);
-    this.sourceId = QgRepository.currentSourceId();
-    AppStorage.setOrCreate('qgSourceTick', (AppStorage.get<number>('qgSourceTick') ?? 0) + 1);
-    promptAction.showToast({ message: '站源已切换' });
-  }
-
   private confirmClear(what: string, onConfirm: () => void): void {
     AlertDialog.show({
       title: `清空${what}`,
@@ -228,56 +116,6 @@ struct QgSettingsPage {
         }
       }
     });
-  }
-
-  /** 从当前编辑行构建按站源代理表（仅保留 direct/manual 有效项） */
-  private buildSourceProxies(): Record<string, QgSourceProxy> {
-    const out: Record<string, QgSourceProxy> = {};
-    for (const row of this.sourceProxyRows) {
-      if (row.mode === 'direct') {
-        const proxy: QgSourceProxy = new QgSourceProxy();
-        proxy.mode = 'direct';
-        out[row.id] = proxy;
-      } else if (row.mode === 'manual' && row.host.length > 0 && row.port >= 1 && row.port <= 65535) {
-        const proxy: QgSourceProxy = new QgSourceProxy();
-        proxy.mode = 'manual';
-        proxy.host = row.host;
-        proxy.port = row.port;
-        out[row.id] = proxy;
-      }
-    }
-    return out;
-  }
-
-  /** 用站源列表 + 已存设置构建可编辑行 */
-  private loadSourceProxyRows(): void {
-    const stored: Record<string, QgSourceProxy> = QgStore.getInstance().getSettings().sourceProxies;
-    const rows: QgSourceProxyRow[] = [];
-    for (const desc of QgRepository.descriptions()) {
-      const proxy: QgSourceProxy | undefined = stored[desc.id];
-      rows.push(new QgSourceProxyRow(desc.id, desc.name,
-        proxy !== undefined ? proxy.mode : 'follow',
-        proxy !== undefined ? proxy.host : '',
-        proxy !== undefined && proxy.port > 0 ? proxy.port : 7890));
-    }
-    this.sourceProxyRows = rows;
-  }
-
-  /** 切换某站源的连接方式并保存 */
-  private setSourceProxyMode(row: QgSourceProxyRow, mode: string): void {
-    if (row.mode === mode) {
-      return;
-    }
-    row.mode = mode;
-    this.sourceProxyRows = this.sourceProxyRows.slice();
-    this.persistSettings();
-  }
-
-  private sourceTileWidth(): string {
-    if (this.screenWidth >= 840) {
-      return '32%';
-    }
-    return '48.5%';
   }
 
   build() {
@@ -307,11 +145,10 @@ struct QgSettingsPage {
 
           Column() {
             QgSegmented({
-              options: ['外观', '播放', '片库', '更多'],
+              options: ['外观', '播放', '更多'],
               selectedIndex: this.settingsSection,
               onSelect: (idx: number) => {
                 this.settingsSection = idx;
-                if (idx === 2 && this.moduleEntries.length === 0) this.refreshModuleStore();
               }
             })
           }
@@ -325,9 +162,6 @@ struct QgSettingsPage {
                 this.HomeBuilder()
               } else if (this.settingsSection === 1) {
                 this.PlayBuilder()
-              } else if (this.settingsSection === 2) {
-                this.ModuleStoreBuilder()
-                this.SourceBuilder()
               } else {
                 this.NetworkBuilder()
                 this.DataBuilder()
@@ -356,22 +190,16 @@ struct QgSettingsPage {
       this.stack = ctx.pathStack;
       const s: QgAppSettings = QgStore.getInstance().getSettings();
       this.colorMode = s.colorMode;
-      this.sourceId = QgRepository.currentSourceId();
-      this.reloadSources();
+      this.sourceId = s.sourceId;
       this.autoPlay = s.autoPlay;
       this.autoNext = s.autoNext;
       this.directPlay = s.directPlay;
       this.proxyOn = s.proxyOn;
       this.proxyHost = s.proxyHost;
       this.proxyPort = s.proxyPort;
-      this.loadSourceProxyRows();
       this.homeContinue = s.homeContinue;
       this.homeRank = s.homeRank;
       this.homeRecommendations = s.homeRecommendations;
-      if (ctx.pathInfo.param === 'modules') {
-        this.settingsSection = 2;
-        this.refreshModuleStore();
-      }
     })
   }
 
@@ -652,113 +480,6 @@ struct QgSettingsPage {
   }
 
   @Builder
-  SourceBuilder() {
-    Column() {
-      this.GroupHeaderBuilder('SOURCES', '可用站源')
-      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-        ForEach(this.sourceDescriptions, (desc: QgSourceDesc) => {
-          this.SourceCardBuilder(desc, '')
-        }, (desc: QgSourceDesc) => desc.id)
-      }
-      .width('100%')
-
-      Text('各站源数据来自公开网页与接口，仅供学习交流；如加载失败可切换其他站源。')
-        .fontSize(12)
-        .fontColor(QgTheme.color('textFaint', this.themeId, this.darkOn))
-        .lineHeight(18)
-        .padding({ top: 10, left: 4 })
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  SourceCardBuilder(desc: QgSourceDesc | undefined, groupLabel: string) {
-    if (desc !== undefined) {
-      Column({ space: 6 }) {
-        Row() {
-          Text(groupLabel.length > 0 ? `${groupLabel} · ${desc.entryName}` : desc.name)
-            .fontSize(15)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.sourceId === desc.id ? QgTheme.color('accentOn', this.themeId, this.darkOn) : QgTheme.color('text', this.themeId, this.darkOn))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
-          if (this.sourceId === desc.id) {
-            SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
-              .fontSize(16)
-              .fontColor([QgTheme.color('accentOn', this.themeId, this.darkOn)])
-          }
-        }
-        .width('100%')
-
-        Text(desc.desc.length > 0 ? desc.desc : '短剧片库')
-          .fontSize(11)
-          .fontColor(this.sourceId === desc.id ? QgTheme.color('accentOn', this.themeId, this.darkOn) : QgTheme.color('textFaint', this.themeId, this.darkOn))
-          .opacity(this.sourceId === desc.id ? 0.78 : 1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .width(this.sourceTileWidth())
-      .padding(14)
-      .borderRadius(18)
-      .backgroundColor(this.sourceId === desc.id ? QgTheme.color('accent', this.themeId, this.darkOn) : QgTheme.color('surface', this.themeId, this.darkOn))
-      .border({ width: this.sourceId === desc.id ? 0 : 1, color: QgTheme.color('divider', this.themeId, this.darkOn) })
-      .alignItems(HorizontalAlign.Start)
-      .margin({ bottom: 10 })
-      .onClick(() => this.selectSource(desc.id))
-    }
-  }
-
-  @Builder
-  ModuleStoreBuilder() {
-    Column() {
-      Text('站源商店').fontSize(22).fontWeight(FontWeight.Bold)
-        .fontColor(QgTheme.color('text', this.themeId, this.darkOn)).width('100%').margin({ top: 18, bottom: 14 })
-      QgSegmented({ options: ['在线仓库', `已安装 ${this.installedModules.length}`], selectedIndex: this.moduleFilter,
-        onSelect: (index: number): void => { this.moduleFilter = index; } })
-      Row({ space: 10 }) {
-        Column({ space: 3 }) {
-          Text(this.moduleStatus).fontSize(13).fontColor(QgTheme.color('text', this.themeId, this.darkOn)).maxLines(2)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button(this.moduleBusy ? '读取中' : '刷新').fontSize(13).height(36).fontColor(QgTheme.color('accentOn', this.themeId, this.darkOn)).backgroundColor(QgTheme.color('accent', this.themeId, this.darkOn)).borderRadius(12).enabled(!this.moduleBusy).onClick(() => this.refreshModuleStore())
-      }.width('100%').padding(14).borderRadius(14).backgroundColor(QgTheme.color('surfaceHigh', this.themeId, this.darkOn))
-      if (this.moduleFilter === 0) {
-      if (this.moduleEntries.some((item: QgModuleEntry): boolean => item.hasUpdate())) {
-        Button('更新全部').enabled(!this.moduleBusy).onClick(() => this.updateModules())
-          .fontColor(QgTheme.color('accentOn', this.themeId, this.darkOn))
-          .backgroundColor(QgTheme.color('accent', this.themeId, this.darkOn)).margin({ top: 12 })
-      }
-      ForEach(this.moduleEntries, (item: QgModuleEntry) => {
-        Row({ space: 10 }) {
-          Column({ space: 3 }) {
-            Text(item.name).fontSize(14).fontWeight(FontWeight.Medium).fontColor(QgTheme.color('text', this.themeId, this.darkOn))
-            Text(`${item.description} · v${item.version}${item.installedVersion.length > 0 ? ` · 已安装 v${item.installedVersion}` : ''}`).fontSize(11).fontColor(QgTheme.color('textFaint', this.themeId, this.darkOn)).maxLines(2)
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Button(item.hasUpdate() ? '更新' : item.installed() ? '已安装' : '安装').fontSize(12).height(40).fontColor(item.installed() && !item.hasUpdate() ? QgTheme.color('textDim', this.themeId, this.darkOn) : QgTheme.color('accentOn', this.themeId, this.darkOn)).backgroundColor(item.installed() && !item.hasUpdate() ? QgTheme.color('surfaceHigh', this.themeId, this.darkOn) : QgTheme.color('accent', this.themeId, this.darkOn)).borderRadius(12).enabled(!this.moduleBusy && (!item.installed() || item.hasUpdate())).onClick(() => this.installModule(item))
-        }.width('100%').padding({ left: 14, right: 14, top: 10, bottom: 10 })
-      }, (item: QgModuleEntry) => item.id)
-      } else {
-        if (this.installedModules.length === 0) {
-          Text('尚未安装在线站源').fontSize(14).fontColor(QgTheme.color('textDim', this.themeId, this.darkOn)).padding(20)
-        }
-        ForEach(this.installedModules, (pkg: QgModulePackage) => {
-          Row({ space: 10 }) {
-            Column({ space: 6 }) {
-              Text(pkg.manifest.name).fontSize(15).fontWeight(FontWeight.Bold)
-                .fontColor(QgTheme.color('text', this.themeId, this.darkOn))
-              Text(`v${pkg.manifest.version} · 已启用`).fontSize(12)
-                .fontColor(QgTheme.color('textDim', this.themeId, this.darkOn))
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Button('移除').enabled(!this.moduleBusy).onClick(() => this.restoreModule(pkg))
-              .fontColor(QgTheme.color('text', this.themeId, this.darkOn))
-              .backgroundColor(QgTheme.color('surfaceHigh', this.themeId, this.darkOn)).height(40)
-          }.width('100%').padding({ top: 12, bottom: 12 })
-        }, (pkg: QgModulePackage) => pkg.manifest.id)
-      }
-    }.width('100%').alignItems(HorizontalAlign.Start).margin({ bottom: 24 })
-  }
-  @Builder
   NetworkBuilder() {
     Column() {
       this.GroupHeaderBuilder('NETWORK', '网络代理')
@@ -818,107 +539,6 @@ struct QgSettingsPage {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-
-    Column({ space: 6 }) {
-      Text('按站源代理')
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(QgTheme.color('textDim', this.themeId, this.darkOn))
-      Text('单独设置的站源，其请求与播放优先使用这里的方式；未设置的跟随上方全局代理')
-        .fontSize(11)
-        .fontColor(QgTheme.color('textDim', this.themeId, this.darkOn))
-      Column() {
-        ForEach(this.sourceProxyRows, (row: QgSourceProxyRow) => {
-          Column() {
-            Row() {
-              Column({ space: 1 }) {
-                Text(row.name)
-                  .fontSize(15)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(QgTheme.color('text', this.themeId, this.darkOn))
-                Text(row.mode === 'follow' ? '跟随全局' : row.mode === 'direct' ? '直连' : '手动代理')
-                  .fontSize(11)
-                  .fontColor(QgTheme.color('textDim', this.themeId, this.darkOn))
-              }
-              .alignItems(HorizontalAlign.Start)
-              .layoutWeight(1)
-
-              Row({ space: 6 }) {
-                this.ProxyPillBuilder('跟随全局', row.mode === 'follow', () => this.setSourceProxyMode(row, 'follow'))
-                this.ProxyPillBuilder('直连', row.mode === 'direct', () => this.setSourceProxyMode(row, 'direct'))
-                this.ProxyPillBuilder('手动', row.mode === 'manual', () => this.setSourceProxyMode(row, 'manual'))
-              }
-            }
-            .width('100%')
-
-            if (row.mode === 'manual') {
-              Divider().color(QgTheme.color('divider', this.themeId, this.darkOn)).margin({ top: 10, bottom: 4 })
-              Row({ space: 10 }) {
-                Text('主机').fontSize(13).fontColor(QgTheme.color('textDim', this.themeId, this.darkOn)).width(36)
-                TextInput({ text: row.host, placeholder: '127.0.0.1' })
-                  .fontSize(13)
-                  .fontColor(QgTheme.color('text', this.themeId, this.darkOn))
-                  .backgroundColor(QgTheme.color('surfaceHigh', this.themeId, this.darkOn))
-                  .borderRadius(10)
-                  .height(38)
-                  .layoutWeight(1)
-                  .onChange((value: string) => {
-                    row.host = value.trim();
-                    this.persistSettings();
-                  })
-              }
-              .width('100%')
-              .padding({ top: 4, bottom: 4 })
-
-              Row({ space: 10 }) {
-                Text('端口').fontSize(13).fontColor(QgTheme.color('textDim', this.themeId, this.darkOn)).width(36)
-                TextInput({ text: `${row.port}`, placeholder: '7890' })
-                  .fontSize(13)
-                  .fontColor(QgTheme.color('text', this.themeId, this.darkOn))
-                  .backgroundColor(QgTheme.color('surfaceHigh', this.themeId, this.darkOn))
-                  .borderRadius(10)
-                  .height(38)
-                  .layoutWeight(1)
-                  .type(InputType.Number)
-                  .onChange((value: string) => {
-                    const port: number = Number(value);
-                    if (!Number.isNaN(port) && port >= 1 && port <= 65535) {
-                      row.port = Math.floor(port);
-                      this.persistSettings();
-                    }
-                  })
-              }
-              .width('100%')
-              .padding({ top: 4, bottom: 6 })
-            }
-          }
-          .width('100%')
-          .padding({ top: 12, bottom: 12, left: 16, right: 16 })
-        }, (row: QgSourceProxyRow) => `${row.id}:${row.mode}:${row.host}:${row.port}`)
-      }
-      .width('100%')
-      .borderRadius(QgUi.R_CARD)
-      .backgroundColor(QgTheme.color('surface', this.themeId, this.darkOn))
-      .border({ width: 1, color: QgTheme.color('divider', this.themeId, this.darkOn) })
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  ProxyPillBuilder(label: string, active: boolean, onTap: () => void) {
-    Text(label)
-      .fontSize(12)
-      .fontWeight(active ? FontWeight.Bold : FontWeight.Normal)
-      .fontColor(active ? QgTheme.color('accentOn', this.themeId, this.darkOn) :
-        QgTheme.color('textDim', this.themeId, this.darkOn))
-      .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-      .borderRadius(14)
-      .backgroundColor(active ? QgTheme.color('accent', this.themeId, this.darkOn) :
-        QgTheme.color('surfaceHigh', this.themeId, this.darkOn))
-      .onClick(() => {
-        onTap();
-      })
   }
 
   @Builder

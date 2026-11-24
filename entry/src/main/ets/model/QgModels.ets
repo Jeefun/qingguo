@@ -8,7 +8,7 @@
 export class QgDrama {
   /** 全局唯一 ID：sourceId + ':' + 站点内 ID */
   id: string = '';
-  /** 所属站源 ID（hongguo / hanxiaoquan / sorani / huangdou / …，见 QG_SOURCES） */
+  /** 所属站源 ID（hongguo / hanxiaoquan / sorani / huangdou / …） */
   sourceId: string = '';
   title: string = '';
   genre: string = '';
@@ -209,16 +209,6 @@ export class QgBookmarkRecord {
   createdAt: number = 0;
 }
 
-/** 单站源代理覆盖（设置 › 代理 按站源单独设置） */
-export class QgSourceProxy {
-  /** follow=跟随全局 | direct=直连 | manual=手动代理 */
-  mode: string = 'follow';
-  /** 手动代理主机 */
-  host: string = '';
-  /** 手动代理端口 */
-  port: number = 7890;
-}
-
 /** 应用设置 */
 export class QgAppSettings {
   /** 外观：跟随系统 | 浅色 | 深色 */
@@ -255,8 +245,6 @@ export class QgAppSettings {
   proxyHost: string = '';
   /** 网络：代理端口 */
   proxyPort: number = 7890;
-  /** 网络：按站源代理覆盖（key=站源ID，未设置的跟随全局） */
-  sourceProxies: Record<string, QgSourceProxy> = {};
   /** 首页模块开关 */
   homeContinue: boolean = true;
   homeRank: boolean = true;
@@ -301,75 +289,4 @@ export class QgSourceDesc {
     this.groupName = name;
     this.entryName = name;
   }
-}
-
-/** 站源分组信息 */
-export class QgSourceGroupInfo {
-  id: string = '';
-  name: string = '';
-  memberIds: string[] = [];
-
-  constructor(id: string, name: string, memberIds: string[]) {
-    this.id = id;
-    this.name = name;
-    this.memberIds = memberIds;
-  }
-}
-
-/** 全部 15 个站源（对照真果鉴 models.dart SourceSite） */
-export const QG_SOURCES: QgSourceDesc[] = [
-  qgSrc('hongguo', '红果', '短剧 · 漫剧 · AI 剧 · 听书'),
-  qgSrc('hanxiaoquan', '韩小圈', '韩剧 · 韩国电影 · 综艺动漫'),
-  qgSrc('guipian', '鬼片', '鬼片 · 电视剧 · 动漫'),
-  qgSrc('sorani', '青空', '番剧 · 剧场动画 · 特摄'),
-  qgSrc('huangdou', '黄豆', '精选短剧'),
-  qgSrc('huangju', '剧果', '热门 · 最新 · 分类短剧'),
-  qgSrc('yeguo', '野果', '分类短剧 · 在线搜索'),
-  qgSrc('dsd', '帝果', '分类视频 · 在线搜索'),
-  qgSrc('jinguoduanju', '禁果短剧', '推荐 · 分类短剧 · 在线搜索'),
-  qgSrc('jinguo', '禁果', '精选 · 最新 · 分类短剧 · 在线搜索'),
-  qgSrc('heitao', '黑桃', '分类短剧 · 在线搜索'),
-  qgSrc('beabox', '笔盒', '分类视频 · 在线搜索'),
-  qgHuangguo('huangguo-video', '黄果视频', '视频剧集', '视频'),
-  qgHuangguo('huangguoai', '黄果 AI', 'AI 短剧', 'AI'),
-  qgHuangguo('cloudfront', '黄果旧版', '旧 API 剧库', '旧版')
-];
-
-function qgSrc(id: string, name: string, desc: string): QgSourceDesc {
-  return new QgSourceDesc(id, name, desc);
-}
-
-function qgHuangguo(id: string, name: string, desc: string, entryName: string): QgSourceDesc {
-  const d: QgSourceDesc = new QgSourceDesc(id, name, desc);
-  d.groupId = 'huangguo';
-  d.groupName = '黄果';
-  d.entryName = entryName;
-  return d;
-}
-
-/** 按源 id 查描述（找不到返回 undefined） */
-export function qgSourceDescOf(id: string): QgSourceDesc | undefined {
-  return QG_SOURCES.find((d: QgSourceDesc): boolean => d.id === id);
-}
-
-/** 是否为已知源 id */
-export function qgIsKnownSource(id: string): boolean {
-  return qgSourceDescOf(id) !== undefined;
-}
-
-/** 源分组列表（设置页展示顺序：黄果组三源排最后） */
-export function qgSourceGroups(): QgSourceGroupInfo[] {
-  const groups: QgSourceGroupInfo[] = [];
-  const seen: Map<string, QgSourceGroupInfo> = new Map<string, QgSourceGroupInfo>();
-  for (let i: number = 0; i < QG_SOURCES.length; i++) {
-    const d: QgSourceDesc = QG_SOURCES[i];
-    let g: QgSourceGroupInfo | undefined = seen.get(d.groupId);
-    if (g === undefined) {
-      g = new QgSourceGroupInfo(d.groupId, d.groupName, []);
-      seen.set(d.groupId, g);
-      groups.push(g);
-    }
-    g.memberIds.push(d.id);
-  }
-  return groups;
 }

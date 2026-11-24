@@ -1,27 +1,19 @@
+/**
+ * 内置站源模块仓库（对齐上游 module_bundled.go）。
+ * 18 个 JS 模块随包内置在 resources/rawfile/modules/{id}/（manifest.json + main.js），
+ * 启动时安装/升级到应用沙箱 qg_verified_modules/；旧版在线安装的模块继续可用
+ * （版本更高时保留，更低时被内置版本覆盖）。模块状态（loadState/saveState）
+ * 仍按 id 持久化，供 QgModuleHost 使用。
+ */
 import { fileIo } from '@kit.CoreFileKit';
+import { common } from '@kit.AbilityKit';
 import { QgDiag } from './QgDiag';
-import { QgHttp, QgHttpResponse } from './QgHttp';
 import { QgJson } from './QgJson';
 import { qgToHex, qgUtf8Decode, qgUtf8Encode } from './QgBytes';
 import { qgSha256 } from './QgCrypto';
 
-const INDEX_URLS: string[] = [
-  'https://raw.githubusercontent.com/guoapp-modules/index/main/index.json',
-  'https://api.github.com/repos/guoapp-modules/index/contents/index.json?ref=main',
-  'https://fastly.jsdelivr.net/gh/guoapp-modules/index@main/index.json',
-  'https://gcore.jsdelivr.net/gh/guoapp-modules/index@main/index.json',
-  'https://cdn.jsdelivr.net/gh/guoapp-modules/index@main/index.json'
-];
-const FILE_URLS: string[] = [
-  'https://raw.githubusercontent.com/{repo}/{tag}/{file}',
-  'https://fastly.jsdelivr.net/gh/{repo}@{tag}/{file}',
-  'https://gcore.jsdelivr.net/gh/{repo}@{tag}/{file}',
-  'https://cdn.jsdelivr.net/gh/{repo}@{tag}/{file}',
-  'https://gh-proxy.com/https://raw.githubusercontent.com/{repo}/{tag}/{file}',
-  'https://api.github.com/repos/{repo}/contents/{file}?ref={tag}'
-];
 const STORE_API: number = 1;
-const MAX_INDEX_BYTES: number = 1 << 20;
+const BUNDLED_ROOT: string = 'modules';
 const MAX_MANIFEST_BYTES: number = 64 << 10;
 const MAX_MODULE_BYTES: number = 4 << 20;
 const MAX_PACKAGE_BYTES: number = 6 * MAX_MODULE_BYTES + 6 * MAX_MANIFEST_BYTES + 4096;
@@ -30,60 +22,11 @@ const MAX_SOURCE_STATE_BYTES: number = 4 << 20;
 const MAX_SOURCE_STATES: number = 32;
 const ID_PATTERN: RegExp = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const VERSION_PATTERN: RegExp = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
-const HASH_PATTERN: RegExp = /^[0-9a-f]{64}$/;
 const HOST_PATTERN: RegExp = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 const CAPABILITIES: string[] = [
   'search', 'account', 'suggestions', 'recommendations', 'danmaku', 'devices', 'rankings',
   'seasons', 'cover', 'metadata', 'catalogState', 'mediaAuth'
 ];
-
-export class QgModuleEntry {
-  id: string = '';
-  name: string = '';
-  version: string = '';
-  description: string = '';
-  adult: boolean = false;
-  repo: string = '';
-  tag: string = '';
-  manifestHash: string = '';
-  entryHash: string = '';
-  installedVersion: string = '';
-
-  static fromObject(value: Object): QgModuleEntry | null {
-    const row: Record<string, Object> | null = QgJson.obj(value);
-    if (row === null || row['api'] !== STORE_API || typeof row['adult'] !== 'boolean') {
-      return null;
-    }
-    const hashes: Record<string, Object> | null = QgJson.field(row, 'sha256');
-    if (hashes === null) {
-      return null;
-    }
-    const item: QgModuleEntry = new QgModuleEntry();
-    item.id = QgJson.str(row['id']);
-    item.name = QgJson.str(row['name']).trim();
-    item.version = QgJson.str(row['version']);
-    item.description = QgJson.str(row['description']);
-    item.adult = row['adult'] === true;
-    item.repo = QgJson.str(row['repo']);
-    item.tag = QgJson.str(row['tag']);
-    item.manifestHash = QgJson.str(hashes['manifest.json']);
-    item.entryHash = QgJson.str(hashes['main.js']);
-    if (!ID_PATTERN.test(item.id) || item.name.length === 0 || !VERSION_PATTERN.test(item.version) ||
-      item.repo !== `guoapp-modules/${item.id}` || item.tag !== `v${item.version}` ||
-      !HASH_PATTERN.test(item.manifestHash) || !HASH_PATTERN.test(item.entryHash)) {
-      return null;
-    }
-    return item;
-  }
-
-  installed(): boolean {
-    return this.installedVersion.length > 0;
-  }
-
-  hasUpdate(): boolean {
-    return this.installed() && QgModuleStore.compareVersion(this.version, this.installedVersion) > 0;
-  }
-}
 
 export class QgModuleManifest {
   id: string = '';
@@ -189,16 +132,20 @@ interface QgSavedModule {
 }
 
 export class QgModuleStore {
+  private static inited: boolean = false;
   private static directory: string = '';
-  private static accepted: Map<string, QgModuleEntry> = new Map();
   private static packages: Map<string, QgModulePackage> = new Map();
-  private static prepared: WeakSet<QgModulePackage> = new WeakSet();
 
-  static init(filesDir: string): void {
-    if (QgModuleStore.directory || !filesDir) {
+  /**
+   * 初始化：打开沙箱站源目录加载已装模块，然后把 rawfile 内置模块
+   * 安装/升级进去（版本不高于已装时跳过，保留用户已有的更新版本）。
+   */
+  static init(context: common.UIAbilityContext): void {
+    if (QgModuleStore.inited || context === null || !context.filesDir) {
       return;
     }
-    const directory: string = `${filesDir}/qg_verified_modules`;
+    QgModuleStore.inited = true;
+    const directory: string = `${context.filesDir}/qg_verified_modules`;
     try {
       try {
         fileIo.mkdirSync(directory, true);
@@ -225,7 +172,7 @@ export class QgModuleStore {
           if (saved === null) {
             throw new Error('站源存档损坏');
           }
-          const pkg: QgModulePackage = QgModuleStore.verify(QgJson.str(saved['manifest']), QgJson.str(saved['code']),
+          const pkg: QgModulePackage = QgModuleStore.buildPackage(QgJson.str(saved['manifest']), QgJson.str(saved['code']),
             QgJson.str(saved['manifestHash']), QgJson.str(saved['entryHash']));
           if (pkg.manifest.id !== id) {
             throw new Error('站源标识与文件名不符');
@@ -238,6 +185,47 @@ export class QgModuleStore {
     } catch (error) {
       QgDiag.log('Module', `站源目录不可用：${error}`);
     }
+    QgModuleStore.installBundled(context);
+  }
+
+  /** 安装/升级 rawfile 内置模块（单个失败只记日志，不阻塞其余模块） */
+  private static installBundled(context: common.UIAbilityContext): void {
+    let ids: string[] = [];
+    try {
+      ids = context.resourceManager.getRawFileListSync(BUNDLED_ROOT);
+    } catch (error) {
+      QgDiag.log('Module', `内置站源目录不可读：${error}`);
+      return;
+    }
+    for (let index = 0; index < ids.length; index++) {
+      const id: string = ids[index];
+      if (!ID_PATTERN.test(id)) {
+        continue;
+      }
+      try {
+        const rawManifest: string =
+          qgUtf8Decode(context.resourceManager.getRawFileContentSync(`${BUNDLED_ROOT}/${id}/manifest.json`));
+        const code: string =
+          qgUtf8Decode(context.resourceManager.getRawFileContentSync(`${BUNDLED_ROOT}/${id}/main.js`));
+        const manifest: QgModuleManifest = QgModuleManifest.parse(rawManifest);
+        if (manifest.id !== id) {
+          throw new Error('站源标识与目录名不符');
+        }
+        const current: QgModulePackage | undefined = QgModuleStore.packages.get(id);
+        if (current !== undefined && QgModuleStore.compareVersion(manifest.version, current.manifest.version) <= 0) {
+          continue;
+        }
+        const pkg: QgModulePackage = QgModuleStore.buildPackage(rawManifest, code,
+          qgToHex(qgSha256(qgUtf8Encode(rawManifest))), qgToHex(qgSha256(qgUtf8Encode(code))));
+        const saved: QgSavedModule = {
+          manifest: pkg.rawManifest, code: pkg.code, manifestHash: pkg.manifestHash, entryHash: pkg.entryHash
+        };
+        QgModuleStore.write(`${QgModuleStore.storePath(id)}.json`, JSON.stringify(saved));
+        QgModuleStore.packages.set(id, pkg);
+      } catch (error) {
+        QgDiag.log('Module', `内置站源 ${id} 安装失败：${error}`);
+      }
+    }
   }
 
   static installed(): QgModulePackage[] {
@@ -246,85 +234,6 @@ export class QgModuleStore {
 
   static load(): QgModulePackage[] {
     return QgModuleStore.installed();
-  }
-
-  static async index(): Promise<QgModuleEntry[]> {
-    let reason: string = '';
-    for (let index: number = 0; index < INDEX_URLS.length; index++) {
-      try {
-        const data: Uint8Array = await QgModuleStore.get(INDEX_URLS[index], MAX_INDEX_BYTES);
-        const parsed: Record<string, Object> | null = QgJson.obj(QgJson.parse(qgUtf8Decode(data)));
-        if (parsed === null || !Array.isArray(parsed['modules'])) {
-          throw new Error('索引格式无效');
-        }
-        if (parsed['format'] !== 1) {
-          throw new Error('索引格式不兼容，请更新青果');
-        }
-        const entries: Map<string, QgModuleEntry> = new Map();
-        const rows: Object[] = QgJson.arr(parsed['modules']);
-        for (let row: number = 0; row < rows.length; row++) {
-          const entry: QgModuleEntry | null = QgModuleEntry.fromObject(rows[row]);
-          if (entry !== null && !entries.has(entry.id)) {
-            entry.installedVersion = QgModuleStore.packages.get(entry.id)?.manifest.version ?? '';
-            entries.set(entry.id, entry);
-          }
-        }
-        QgModuleStore.accepted = entries;
-        return Array.from(entries.values());
-      } catch (error) {
-        reason = error instanceof Error ? error.message : String(error);
-      }
-    }
-    throw new Error(`无法连接官方站源商店，请检查网络后刷新。${reason ? ' ' + reason : ''}`);
-  }
-
-  static async download(entry: QgModuleEntry): Promise<QgModulePackage> {
-    const approved: QgModuleEntry | undefined = QgModuleStore.accepted.get(entry.id);
-    if (approved === undefined || approved.version !== entry.version || approved.manifestHash !== entry.manifestHash ||
-      approved.entryHash !== entry.entryHash) {
-      throw new Error('站源索引已变化，请刷新后重试');
-    }
-    const installed: string = QgModuleStore.packages.get(approved.id)?.manifest.version ?? '';
-    if (installed && QgModuleStore.compareVersion(approved.version, installed) < 0) {
-      throw new Error('线上版本低于已安装版本');
-    }
-    const files: Uint8Array[] = await Promise.all([
-      QgModuleStore.fetch(approved, 'manifest.json', approved.manifestHash, MAX_MANIFEST_BYTES),
-      QgModuleStore.fetch(approved, 'main.js', approved.entryHash, MAX_MODULE_BYTES)
-    ]);
-    const pkg: QgModulePackage = QgModuleStore.verify(qgUtf8Decode(files[0]), qgUtf8Decode(files[1]),
-      approved.manifestHash, approved.entryHash);
-    if (pkg.manifest.id !== approved.id || pkg.manifest.version !== approved.version || pkg.manifest.adult !== approved.adult) {
-      throw new Error('站源清单与线上索引不符');
-    }
-    QgModuleStore.prepared.add(pkg);
-    return pkg;
-  }
-
-  static commit(pkg: QgModulePackage): void {
-    if (!QgModuleStore.prepared.has(pkg)) {
-      throw new Error('请先从官方商店下载站源');
-    }
-    const verified: QgModulePackage = QgModuleStore.verify(pkg.rawManifest, pkg.code, pkg.manifestHash, pkg.entryHash);
-    if (verified.manifest.id !== pkg.manifest.id || verified.manifest.version !== pkg.manifest.version) {
-      throw new Error('站源清单在安装前已变化');
-    }
-    const current: QgModulePackage | undefined = QgModuleStore.packages.get(pkg.manifest.id);
-    if (current !== undefined && QgModuleStore.compareVersion(pkg.manifest.version, current.manifest.version) < 0) {
-      throw new Error('线上版本低于已安装版本');
-    }
-    const saved: QgSavedModule = {
-      manifest: pkg.rawManifest, code: pkg.code, manifestHash: pkg.manifestHash, entryHash: pkg.entryHash
-    };
-    QgModuleStore.write(`${QgModuleStore.storePath(pkg.manifest.id)}.json`, JSON.stringify(saved));
-    QgModuleStore.packages.set(pkg.manifest.id, verified);
-    QgModuleStore.prepared.delete(pkg);
-  }
-
-  static remove(id: string): void {
-    const path: string = `${QgModuleStore.storePath(id)}.json`;
-    fileIo.unlinkSync(path);
-    QgModuleStore.packages.delete(id);
   }
 
   static loadState(id: string, name: string): string {
@@ -405,7 +314,7 @@ export class QgModuleStore {
     }
   }
 
-  private static verify(raw: string, code: string, manifestHash: string, entryHash: string): QgModulePackage {
+  private static buildPackage(raw: string, code: string, manifestHash: string, entryHash: string): QgModulePackage {
     const manifestBytes: Uint8Array = qgUtf8Encode(raw);
     const codeBytes: Uint8Array = qgUtf8Encode(code);
     if (manifestBytes.length > MAX_MANIFEST_BYTES || codeBytes.length > MAX_MODULE_BYTES || codeBytes.length === 0 ||
@@ -413,36 +322,6 @@ export class QgModuleStore {
       throw new Error('站源文件校验不符');
     }
     return new QgModulePackage(QgModuleManifest.parse(raw), code, raw, manifestHash, entryHash);
-  }
-
-  private static async get(url: string, limit: number): Promise<Uint8Array> {
-    const accept: string = url.startsWith('https://api.github.com/') ? 'application/vnd.github.raw+json' : '*/*';
-    const response: QgHttpResponse = await QgHttp.request(url, 'GET', { 'Accept': accept, 'User-Agent': 'QingGuo' },
-      null, 12000, limit, 0);
-    if (response.status !== 200) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    if (response.data.length === 0 || response.data.length > limit) {
-      throw new Error('站源文件为空或过大');
-    }
-    return response.data;
-  }
-
-  private static async fetch(entry: QgModuleEntry, file: string, expected: string, limit: number): Promise<Uint8Array> {
-    let reason: string = '';
-    for (let index: number = 0; index < FILE_URLS.length; index++) {
-      try {
-        const url: string = FILE_URLS[index].replace('{repo}', entry.repo).replace('{tag}', entry.tag).replace('{file}', file);
-        const data: Uint8Array = await QgModuleStore.get(url, limit);
-        if (qgToHex(qgSha256(data)) !== expected) {
-          throw new Error('SHA-256 校验不符');
-        }
-        return data;
-      } catch (error) {
-        reason = error instanceof Error ? error.message : String(error);
-      }
-    }
-    throw new Error(`下载 ${entry.name} 的 ${file} 失败：${reason}`);
   }
 
   static compareVersion(left: string, right: string): number {

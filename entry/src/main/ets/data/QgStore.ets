@@ -5,8 +5,8 @@
  */
 import { preferences } from '@kit.ArkData';
 import { Context } from '@kit.AbilityKit';
-import { QgAppSettings, QgBookmarkRecord, QgFollowRecord, QgQueueRecord, QgSourceProxy, QgWatchRecord, qgIsKnownSource } from '../model/QgModels';
-import { QgHttp, QgHttpProxy } from './QgHttp';
+import { QgAppSettings, QgBookmarkRecord, QgFollowRecord, QgQueueRecord, QgWatchRecord } from '../model/QgModels';
+import { QgHttp } from './QgHttp';
 import { QgTheme } from '../components/QgTheme';
 
 const KEY_WATCH: string = 'qg_watch';
@@ -278,7 +278,6 @@ export class QgStore {
     this.settings.proxyOn = patch.proxyOn;
     this.settings.proxyHost = patch.proxyHost;
     this.settings.proxyPort = patch.proxyPort;
-    this.settings.sourceProxies = QgStore.copySourceProxies(patch.sourceProxies);
     this.settings.homeContinue = patch.homeContinue;
     this.settings.homeRank = patch.homeRank;
     this.settings.homeRecommendations = patch.homeRecommendations;
@@ -286,51 +285,11 @@ export class QgStore {
     this.persist(KEY_SETTINGS, JSON.stringify(this.settings));
   }
 
-  /** 代理设置 → QgHttp（全局 + 按站源解析器） */
+  /** 代理设置 → QgHttp 全局代理 */
   private applyNetwork(): void {
     QgHttp.proxy.enabled = this.settings.proxyOn;
     QgHttp.proxy.host = this.settings.proxyHost;
     QgHttp.proxy.port = this.settings.proxyPort;
-    QgHttp.proxyResolver = (sourceId: string): QgHttpProxy => this.resolveProxyFor(sourceId);
-  }
-
-  /** 解析某站源的生效代理：direct=强制直连，manual=独立代理，其余跟随全局 */
-  private resolveProxyFor(sourceId: string): QgHttpProxy {
-    const override: QgSourceProxy | undefined = this.settings.sourceProxies[sourceId];
-    if (override !== undefined) {
-      if (override.mode === 'direct') {
-        const direct: QgHttpProxy = new QgHttpProxy();
-        direct.enabled = false;
-        return direct;
-      }
-      if (override.mode === 'manual' && override.host.length > 0 && override.port > 0) {
-        const manual: QgHttpProxy = new QgHttpProxy();
-        manual.enabled = true;
-        manual.host = override.host;
-        manual.port = override.port;
-        return manual;
-      }
-    }
-    return QgHttp.proxy;
-  }
-
-  /** 深拷贝按站源代理覆盖（避免与外部实例共享引用） */
-  private static copySourceProxies(src: Record<string, QgSourceProxy>): Record<string, QgSourceProxy> {
-    const out: Record<string, QgSourceProxy> = {};
-    const keys: string[] = Object.keys(src);
-    for (let i: number = 0; i < keys.length; i++) {
-      const key: string = keys[i];
-      const item: QgSourceProxy | undefined = src[key];
-      if (item === undefined) {
-        continue;
-      }
-      const copy: QgSourceProxy = new QgSourceProxy();
-      copy.mode = item.mode;
-      copy.host = item.host;
-      copy.port = item.port;
-      out[key] = copy;
-    }
-    return out;
   }
 
   // ---------- 内部 ----------
@@ -563,43 +522,6 @@ export class QgStore {
       const port: number = Number(item['proxyPort'] ?? 7890);
       if (!Number.isNaN(port) && port > 0 && port < 65536) {
         s.proxyPort = port;
-      }
-      const rawProxies: Object | undefined = item['sourceProxies'];
-      if (rawProxies !== null && rawProxies !== undefined && typeof rawProxies === 'object') {
-        const entries: Record<string, Object> = rawProxies as Record<string, Object>;
-        const ids: string[] = Object.keys(entries);
-        for (let i: number = 0; i < ids.length; i++) {
-          const id: string = ids[i];
-          if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(id)) {
-            continue;
-          }
-          const raw: Object | undefined = entries[id];
-          if (raw === null || raw === undefined || typeof raw !== 'object') {
-            continue;
-          }
-          const row: Record<string, Object> = raw as Record<string, Object>;
-          const mode: Object | undefined = row['mode'];
-          if (typeof mode !== 'string' || (mode !== 'direct' && mode !== 'manual')) {
-            continue;
-          }
-          const proxy: QgSourceProxy = new QgSourceProxy();
-          proxy.mode = mode;
-          const host: Object | undefined = row['host'];
-          if (typeof host === 'string' && host.length > 0 && host.length <= 253) {
-            proxy.host = host;
-          }
-          const portRaw: Object | undefined = row['port'];
-          const proxyPort: number = portRaw === undefined ? 7890 : Number(portRaw);
-          if (!Number.isNaN(proxyPort) && proxyPort > 0 && proxyPort < 65536) {
-            proxy.port = proxyPort;
-          } else if (proxy.mode === 'manual') {
-            continue;
-          }
-          if (proxy.mode === 'manual' && (proxy.host.length === 0 || proxy.port <= 0)) {
-            continue;
-          }
-          s.sourceProxies[id] = proxy;
-        }
       }
       s.homeContinue = item['homeContinue'] !== false;
       s.homeRank = item['homeRank'] !== false;

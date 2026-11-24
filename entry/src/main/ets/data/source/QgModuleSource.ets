@@ -1,5 +1,6 @@
 import { run } from 'libqgmodule.so';
 import { QgCategory, QgDrama, QgDramaDetail, QgEpisode, QgPageResult, QgPlayInfo, QgSeason } from '../../model/QgModels';
+import { QgDanmakuItem, QgDanmakuPage } from '../../components/QgDanmakuData';
 import { QgModulePackage } from '../QgModuleStore';
 import { QgModuleHost } from '../QgModuleHost';
 import { QgJson } from '../QgJson';
@@ -259,6 +260,24 @@ export class QgModuleSource extends QgSource {
       info.danmakuId = videoUrl.slice('hongguo-cenc://'.length);
     }
     return info;
+  }
+
+  /** 拉取一页弹幕（30s 时间窗，模块需具备 danmaku 能力） */
+  async danmaku(seriesId: string, videoId: string, startMs: number, durationMs: number): Promise<QgDanmakuPage> {
+    if (!this.pkg.manifest.capabilities.includes('danmaku')) {
+      throw new Error('该站源不支持弹幕');
+    }
+    const raw: Record<string, Object> | null =
+      QgJson.obj(await this.call('danmaku', [seriesId, videoId, startMs, durationMs]));
+    if (raw === null) {
+      throw new Error('站源返回了无效的弹幕');
+    }
+    const items: QgDanmakuItem[] = QgJson.arr(raw['items']).map((value: Object): QgDanmakuItem => {
+      const row: Record<string, Object> | null = QgJson.obj(value);
+      return new QgDanmakuItem(QgJson.str(row?.['id']), QgJson.str(row?.['text']), QgJson.num(row?.['timeMs']));
+    });
+    return new QgDanmakuPage(QgJson.str(raw['episodeId']), items,
+      QgJson.num(raw['startMs']), QgJson.num(raw['nextMs']), QgJson.num(raw['total']));
   }
 
   coverHeaders(url: string): Record<string, string> {

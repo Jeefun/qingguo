@@ -1,13 +1,12 @@
 /**
  * 通用弹幕渲染（移植自 Dart danmaku_controller.dart / danmaku_overlay.dart）。
- * QgDanmakuController：按 30s 时间窗从 HongguoDanmaku 拉取弹幕、去重、屏蔽词过滤、
+ * QgDanmakuController：按 30s 时间窗从注入的弹幕源拉取、去重、屏蔽词过滤、
  * 时钟外推（播放中按倍速推进，暂停冻结）。
  * QgDanmakuView：Canvas + displaySync(30fps) 逐帧绘制滚动弹幕，
  * 轨道分配 / 8s 全程滚动 / 显示区域 / 字号 / 不透明度可调。
  */
 import { displaySync } from '@kit.ArkGraphics2D';
-import { BusinessError } from '@kit.BasicServicesKit';
-import { HongguoDanmakuItem, HongguoDanmakuPage, fetchHongguoDanmaku } from '../data/source/HongguoDanmaku';
+import { QgDanmakuItem, QgDanmakuPage } from './QgDanmakuData';
 
 const QG_DANMAKU_WINDOW_MS: number = 30000;
 const QG_DANMAKU_LIFETIME_MS: number = 8000;
@@ -17,19 +16,6 @@ const QG_DANMAKU_FAIL_RETRY_MS: number = 15000;
 const QG_DANMAKU_KEEP_PAGES: number = 6;
 const QG_DANMAKU_LANE_GAP: number = 24;
 const QG_DANMAKU_MAX_CHARS: number = 100;
-
-/** 通用弹幕条目（渲染层视角，与源解耦） */
-export class QgDanmakuItem {
-  readonly id: string = '';
-  readonly text: string = '';
-  readonly timeMs: number = 0;
-
-  constructor(id: string, text: string, timeMs: number) {
-    this.id = id;
-    this.text = text;
-    this.timeMs = timeMs;
-  }
-}
 
 /** 已分配轨道的一次飞行 */
 export class QgDanmakuFlight {
@@ -53,7 +39,9 @@ export class QgDanmakuFlight {
 export class QgDanmakuController {
   private seriesId: string = '';
   private videoId: string = '';
-  private pages: Map<number, HongguoDanmakuPage> = new Map<number, HongguoDanmakuPage>();
+  private fetcher: ((seriesId: string, videoId: string, startMs: number,
+    durationMs: number) => Promise<QgDanmakuPage>) | null = null;
+  private pages: Map<number, QgDanmakuPage> = new Map<number, QgDanmakuPage>();
   private failures: Map<number, number> = new Map<number, number>();
   private loadingStart: number = -1;
   private generation: number = 0;
@@ -97,6 +85,16 @@ export class QgDanmakuController {
       return `已载入 ${this.items.length} 条弹幕`;
     }
     return this.blockedCount > 0 ? '这段弹幕都被屏蔽了' : '这段暂无弹幕';
+  }
+
+  /** 注入弹幕拉取实现（null 表示本集无弹幕源）；更换实现会清空已载入数据 */
+  setFetcher(fetcher: ((seriesId: string, videoId: string, startMs: number,
+    durationMs: number) => Promise<QgDanmakuPage>) | null): void {
+    if (this.fetcher === fetcher) {
+      return;
+    }
+    this.fetcher = fetcher;
+    this.resetData();
   }
 
   /** 设置弹幕来源（换集/换源时调用） */
@@ -214,9 +212,9 @@ export class QgDanmakuController {
     this.rebuild();
   }
 
-  private covering(position: number): HongguoDanmakuPage | null {
-    let found: HongguoDanmakuPage | null = null;
-    this.pages.forEach((page: HongguoDanmakuPage, start: number) => {
+  private covering(position: number): QgDanmakuPage | null {
+    let found: QgDanmakuPage | null = null;
+    this.pages.forEach((page: QgDanmakuPage, start: number) => {
       if (page.startMs <= position && position < page.nextMs &&
         (found === null || page.startMs > found.startMs)) {
         found = page;
@@ -230,7 +228,7 @@ export class QgDanmakuController {
       return;
     }
     const pos: number = this.positionMs;
-    const page: HongguoDanmakuPage | null = this.covering(pos);
+    const page: QgDanmakuPage | null = this.covering(pos);
     let start: number = Math.floor(pos / QG_DANMAKU_WINDOW_MS) * QG_DANMAKU_WINDOW_MS;
     if (page === null && this.pages.has(start)) {
       start = pos;
@@ -251,13 +249,18 @@ export class QgDanmakuController {
   }
 
   private load(start: number): void {
+    const fetcher: ((seriesId: string, videoId: string, startMs: number,
+      durationMs: number) => Promise<QgDanmakuPage>) | null = this.fetcher;
+    if (fetcher === null) {
+      return;
+    }
     const ticket: number = this.generation;
     const seriesId: string = this.seriesId;
     const videoId: string = this.videoId;
     const duration: number = this.durationMs;
     this.loadingStart = start;
-    fetchHongguoDanmaku(seriesId, videoId, start, duration)
-      .then((page: HongguoDanmakuPage): void => {
+    fetcher(seriesId, videoId, start, duration)
+      .then((page: QgDanmakuPage): void => {
         if (ticket !== this.generation) {
           return;
         }
@@ -271,7 +274,7 @@ export class QgDanmakuController {
         this.prunePages();
         this.rebuild();
       })
-      .catch((error: BusinessError): void => {
+      .catch((error: Error): void => {
         if (ticket !== this.generation) {
           return;
         }
@@ -299,7 +302,7 @@ export class QgDanmakuController {
       return;
     }
     const starts: number[] = [];
-    this.pages.forEach((page: HongguoDanmakuPage, start: number) => {
+    this.pages.forEach((page: QgDanmakuPage, start: number) => {
       starts.push(start);
     });
     starts.sort((a: number, b: number): number =>
@@ -313,17 +316,17 @@ export class QgDanmakuController {
   private rebuild(): void {
     const unique: Map<string, QgDanmakuItem> = new Map<string, QgDanmakuItem>();
     const starts: number[] = [];
-    this.pages.forEach((page: HongguoDanmakuPage, start: number) => {
+    this.pages.forEach((page: QgDanmakuPage, start: number) => {
       starts.push(start);
     });
     starts.sort((a: number, b: number): number => a - b);
     for (let i: number = 0; i < starts.length; i++) {
-      const page: HongguoDanmakuPage | undefined = this.pages.get(starts[i]);
+      const page: QgDanmakuPage | undefined = this.pages.get(starts[i]);
       if (page === undefined) {
         continue;
       }
       for (let j: number = 0; j < page.items.length; j++) {
-        const src: HongguoDanmakuItem = page.items[j];
+        const src: QgDanmakuItem = page.items[j];
         if (!unique.has(src.id)) {
           unique.set(src.id, new QgDanmakuItem(src.id, src.text, src.timeMs));
         }

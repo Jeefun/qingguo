@@ -16,6 +16,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { QgAppSettings, QgBookmarkRecord, QgDrama, QgDramaDetail, QgEpisode, QgPlayerParam, QgPlayInfo, QgWatchRecord, QgSeason, qgEpisodeLabel } from '../model/QgModels';
 import { QgRepository } from '../data/QgRepository';
+import { QgSource, QgSourceManager } from '../data/source/QgSource';
+import { QgModuleSource } from '../data/source/QgModuleSource';
 import { QgStore } from '../data/QgStore';
 import { QgGateway } from '../data/QgGateway';
 import { QgDiag } from '../data/QgDiag';
@@ -838,6 +840,14 @@ struct QgPlayerPage {
     this.danmakuCtl.setDanmakuOn(this.danmakuOn);
     this.danmakuCtl.setBlockWords(settings.danmakuBlockWords);
     this.danmakuStatus = this.danmakuCtl.statusText();
+    const source: QgSource | undefined = QgSourceManager.byId(this.sourceIdOf());
+    if (source instanceof QgModuleSource) {
+      const moduleSource: QgModuleSource = source;
+      this.danmakuCtl.setFetcher((seriesId: string, videoId: string, startMs: number, durationMs: number) =>
+        moduleSource.danmaku(seriesId, videoId, startMs, durationMs));
+    } else {
+      this.danmakuCtl.setFetcher(null);
+    }
     if (this.danmakuId.length === 0) {
       return;
     }

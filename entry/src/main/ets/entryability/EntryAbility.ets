@@ -36,7 +36,7 @@ export default class EntryAbility extends UIAbility {
   private carAwareness: smartMobilityCommon.SmartMobilityAwareness | null = null;
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    QgModuleStore.init(this.context.filesDir);
+    QgModuleStore.init(this.context);
     QgStore.getInstance().init(this.context);
     AppStorage.setOrCreate('qgTheme', QgStore.getInstance().getTheme());
     this.applyColorMode();

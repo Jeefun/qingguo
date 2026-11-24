@@ -1,30 +1,15 @@
 /**
  * 青果APP 数据门面。
- * 注册全部站源（红果 / 韩小圈 / 鬼片 / 青空 / 黄豆 / 剧果 / 野果 / 帝果 /
- * 禁果短剧 / 禁果 / 黑桃 / 笔盒 / 黄果三源），向 UI 提供统一的
- * 异步目录 / 搜索 / 详情 / 播放能力；当前站源由设置 sourceId 决定。
+ * 全部站源为 QuickJS JS 模块（rawfile 内置，经 QgModuleStore 安装），
+ * 向 UI 提供统一的异步目录 / 搜索 / 详情 / 播放能力；
+ * 当前站源由设置 sourceId 决定。
  * 门面方法失败时向上抛错，由 UI 捕获并展示错误态。
  */
 import { QgAppSettings, QgCategory, QgDrama, QgDramaDetail, QgPageResult, QgPlayInfo, QgSeason, QgSourceDesc } from '../model/QgModels';
-import { QgModuleEntry, QgModulePackage, QgModuleStore } from './QgModuleStore';
+import { QgModulePackage, QgModuleStore } from './QgModuleStore';
 import { QgModuleSource } from './source/QgModuleSource';
 import { QgStore } from './QgStore';
 import { QgSource, QgSourceManager } from './source/QgSource';
-import { HongguoSource } from './source/HongguoSource';
-import { HanxiaoquanSource } from './source/HanxiaoquanSource';
-import { SoraniSource } from './source/SoraniSource';
-import { HuangdouSource } from './source/HuangdouSource';
-import { GuipianSource } from './source/GuipianSource';
-import { HeitaoSource } from './source/HeitaoSource';
-import { HuangjuSource } from './source/HuangjuSource';
-import { BeaboxSource } from './source/BeaboxSource';
-import { JinguoduanjuSource } from './source/JinguoduanjuSource';
-import { YeguoSource } from './source/YeguoSource';
-import { DsdSource } from './source/DsdSource';
-import { JinguoSource } from './source/JinguoSource';
-import { HuangguoaiSource } from './source/HuangguoaiSource';
-import { HuangguoVideoSource } from './source/HuangguoVideoSource';
-import { LegacySource } from './source/LegacySource';
 
 const DETAIL_CACHE_MS: number = 5 * 60 * 1000;
 const DETAIL_CACHE_MAX: number = 32;
@@ -36,8 +21,6 @@ export class QgRepository {
   private static detailCacheAt: Map<string, number> = new Map<string, number>();
   /** 最近一次第 1 页目录（热门搜索 / 猜你喜欢 fallback） */
   private static firstPage: QgDrama[] = [];
-  private static builtins: Map<string, QgSource> = new Map();
-  private static revision: number = 0;
   private static seasonCache: Map<string, QgSeason[]> = new Map();
   private static seasonCacheAt: Map<string, number> = new Map();
 
@@ -47,24 +30,8 @@ export class QgRepository {
       return;
     }
     QgRepository.inited = true;
-    QgSourceManager.register(new HongguoSource());
-    QgSourceManager.register(new HanxiaoquanSource());
-    QgSourceManager.register(new SoraniSource());
-    QgSourceManager.register(new HuangdouSource());
-    QgSourceManager.register(new GuipianSource());
-    QgSourceManager.register(new HeitaoSource());
-    QgSourceManager.register(new HuangjuSource());
-    QgSourceManager.register(new BeaboxSource());
-    QgSourceManager.register(new JinguoduanjuSource());
-    QgSourceManager.register(new YeguoSource());
-    QgSourceManager.register(new DsdSource());
-    QgSourceManager.register(new JinguoSource());
-    QgSourceManager.register(new HuangguoaiSource());
-    QgSourceManager.register(new HuangguoVideoSource());
-    QgSourceManager.register(new LegacySource());
-    QgSourceManager.all().forEach((source: QgSource): void => { QgRepository.builtins.set(source.id, source); });
     QgModuleStore.installed().forEach((pkg: QgModulePackage): void => {
-      QgSourceManager.replace(new QgModuleSource(pkg));
+      QgSourceManager.register(new QgModuleSource(pkg));
     });
   }
 
@@ -73,38 +40,6 @@ export class QgRepository {
       const description: string = source instanceof QgModuleSource ? source.pkg.manifest.description : '内置站源';
       return new QgSourceDesc(source.id, source.name, description);
     });
-  }
-
-  static async installModule(entry: QgModuleEntry): Promise<void> {
-    QgRepository.init();
-    const pkg: QgModulePackage = await QgModuleStore.download(entry);
-    const source: QgModuleSource = new QgModuleSource(pkg);
-    await source.validate();
-    QgModuleStore.commit(pkg);
-    QgSourceManager.replace(source);
-    QgRepository.invalidate();
-  }
-
-  static restoreModule(id: string): void {
-    QgRepository.init();
-    QgModuleStore.remove(id);
-    const builtin: QgSource | undefined = QgRepository.builtins.get(id);
-    if (builtin !== undefined) {
-      QgSourceManager.replace(builtin);
-    } else {
-      QgSourceManager.remove(id);
-    }
-    QgRepository.invalidate();
-  }
-
-  private static invalidate(): void {
-    QgRepository.revision++;
-    QgRepository.firstPage = [];
-    QgRepository.detailCache.clear();
-    QgRepository.detailCacheAt.clear();
-    QgRepository.seasonCache.clear();
-    QgRepository.seasonCacheAt.clear();
-    AppStorage.setOrCreate('qgSourceTick', (AppStorage.get<number>('qgSourceTick') ?? 0) + 1);
   }
 
   /** 全部已注册站源 */
@@ -186,9 +121,7 @@ export class QgRepository {
     if (source === undefined) {
       throw new Error('未找到该剧所属的站源');
     }
-    const revision: number = QgRepository.revision;
     const detail: QgDramaDetail = await source.detail(dramaId);
-    if (revision !== QgRepository.revision) return QgRepository.detail(dramaId);
     QgRepository.detailCache.set(dramaId, detail);
     QgRepository.detailCacheAt.set(dramaId, now);
     if (QgRepository.detailCache.size > DETAIL_CACHE_MAX) {
@@ -223,9 +156,7 @@ export class QgRepository {
       if (seasons !== undefined && Date.now() - at < DETAIL_CACHE_MS &&
         seasons.some((season: QgSeason): boolean => season.drama.id === drama.id)) return seasons.slice();
     }
-    const revision: number = QgRepository.revision;
     const items: QgSeason[] = await source.seasons(drama.id);
-    if (revision !== QgRepository.revision) return QgRepository.seasons(drama);
     if (items.length > 200) throw new Error('分季列表过长');
     const ids: Set<string> = new Set();
     const numbers: Set<number> = new Set();
@@ -275,7 +206,7 @@ export class QgRepository {
       base = result.dramas;
     }
     const out: string[] = [];
-    for (let i: number = 0; i < base.length && out.length < 10; i++) {
+    for (let i = 0; i < base.length && out.length < 10; i++) {
       const title: string = base[i].title;
       if (title.length > 0 && !out.includes(title)) {
         out.push(title);

@@ -28,14 +28,9 @@ export class QgHttpProxy {
 export class QgHttp {
   /** 全局代理配置；enabled 时走指定代理，否则走系统默认 */
   static proxy: QgHttpProxy = new QgHttpProxy();
-  /** 按站源解析代理（由 QgStore 注册）：返回该站源的生效代理，无覆盖时回落全局 */
-  static proxyResolver: ((sourceId: string) => QgHttpProxy) | null = null;
 
-  /** 解析某站源的生效代理；无注册解析器或无覆盖时即全局代理 */
+  /** 解析某站源的生效代理（当前即全局代理，保留 sourceId 入参以兼容调用方） */
   static resolveProxy(sourceId: string): QgHttpProxy {
-    if (sourceId.length > 0 && QgHttp.proxyResolver !== null) {
-      return QgHttp.proxyResolver(sourceId);
-    }
     return QgHttp.proxy;
   }
 

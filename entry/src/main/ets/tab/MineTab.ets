@@ -157,12 +157,8 @@ export struct MineTab {
         this.stack.pushPathByName('search', '');
       })
       Divider().color(QgTheme.color('divider', this.themeId, this.darkOn)).margin({ left: 68, right: 16 })
-      this.MenuRowBuilder($r('sys.symbol.gearshape'), '设置与偏好', '主题、播放、弹幕、站源与网络', () => {
+      this.MenuRowBuilder($r('sys.symbol.gearshape'), '设置与偏好', '主题、播放、弹幕与网络', () => {
         this.stack.pushPathByName('settings', '');
-      })
-      Divider().color(QgTheme.color('divider', this.themeId, this.darkOn)).margin({ left: 68, right: 16 })
-      this.MenuRowBuilder($r('sys.symbol.arrow_down_circle'), '站源商店', '安装与更新在线站源', () => {
-        this.stack.pushPathByName('settings', 'modules');
       })
     }
     .width('100%')

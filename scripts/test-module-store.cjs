@@ -11,9 +11,8 @@ require.extensions['.ets'] = (module, filename) => module._compile(typescript.tr
   } }).outputText, filename);
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'qg-module-store-'));
+const rawRoot = path.join(directory, 'rawfile');
 const root = path.resolve(__dirname, '../entry/src/main/ets');
-const network = { request: async () => { throw new Error('offline'); } };
-let failRename = false;
 const platformFs = {
   OpenMode: { WRITE_ONLY: fs.constants.O_WRONLY, CREATE: fs.constants.O_CREAT, TRUNC: fs.constants.O_TRUNC },
   mkdirSync: (target, recursive) => fs.mkdirSync(target, { recursive }),
@@ -24,11 +23,15 @@ const platformFs = {
   writeSync: (fd, bytes) => fs.writeSync(fd, Buffer.from(bytes)),
   fsyncSync: fd => fs.fsyncSync(fd),
   closeSync: file => fs.closeSync(file.fd),
-  renameSync: (source, target) => {
-    if (failRename) throw new Error('out of space');
-    fs.renameSync(source, target);
-  },
+  renameSync: (source, target) => fs.renameSync(source, target),
   unlinkSync: target => fs.unlinkSync(target)
+};
+const context = {
+  filesDir: directory,
+  resourceManager: {
+    getRawFileListSync: parent => fs.readdirSync(path.join(rawRoot, parent)),
+    getRawFileContentSync: relative => new Uint8Array(fs.readFileSync(path.join(rawRoot, relative)))
+  }
 };
 const originalLoad = Module._load;
 Module._load = function (specifier, parent, main) {
@@ -42,105 +45,80 @@ function stub(relative, exports) {
   require.cache[filename] = module;
 }
 stub('data/QgDiag.ets', { QgDiag: { log() {} } });
-stub('data/QgHttp.ets', { QgHttp: network });
 const storePath = path.join(root, 'data/QgModuleStore.ets');
-let { QgModuleStore: Store, QgModuleEntry: Entry, QgModuleManifest: Manifest } = require(storePath);
+const { QgModuleStore: Store, QgModuleManifest: Manifest } = require(storePath);
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
-const packageFor = version => {
-  const manifest = JSON.stringify({ id: 'test', name: 'Test', version, description: 'Example',
-    adult: false, runtime: 'js', api: 1, hosts: ['example.com', '*.example.net'], capabilities: ['search'] });
-  const code = 'module.exports = { categories() { return []; } };';
-  const entry = { id: 'test', name: 'Test', version, api: 1, adult: false,
-    repo: 'guoapp-modules/test', tag: 'v' + version,
-    sha256: { 'manifest.json': digest(manifest), 'main.js': digest(code) } };
-  return { entry, manifest, code };
-};
-let fixture = packageFor('1.0.0');
-let brokenAsset = false;
-let wrongIdentity = false;
-let seen = [];
-function configureNetwork() {
-  network.request = async (url, method, headers, body, timeout, limit) => {
-    seen.push(url);
-    assert.equal(method, 'GET');
-    assert.ok(limit > 0, 'HTTP download must have an enforced byte limit');
-    if (url.includes('/index/') || url.includes('/repos/guoapp-modules/index/')) {
-      if (url.includes('raw.githubusercontent.com')) throw new Error('reset');
-      return { status: 200, data: Buffer.from(JSON.stringify({ format: 1, modules: [fixture.entry] })) };
-    }
-    if (url.includes('raw.githubusercontent.com')) throw new Error('reset');
-    if (url.includes('.jsdelivr.net')) return { status: 503, data: Buffer.from('error') };
-    if (url.includes('manifest.json')) {
-      return { status: 200, data: Buffer.from(wrongIdentity ? fixture.manifest.replace('"test"', '"other"') : fixture.manifest) };
-    }
-    return { status: 200, data: Buffer.from(brokenAsset ? 'tampered' : fixture.code) };
-  };
+const codeOf = id => `module.exports = { categories() { return []; } }; /* ${id} */`;
+const manifestOf = (id, version) => JSON.stringify({ id, name: 'Module ' + id, version,
+  description: 'Example', adult: false, runtime: 'js', api: 1,
+  hosts: ['example.com', '*.example.net'], capabilities: ['search'] });
+const archiveOf = id => JSON.stringify({ manifest: manifestOf(id, '1.0.0'), code: codeOf(id),
+  manifestHash: digest(manifestOf(id, '1.0.0')), entryHash: digest(codeOf(id)) });
+function bundle(id, version = '1.0.0') {
+  const dir = path.join(rawRoot, 'modules', id);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'manifest.json'), manifestOf(id, version));
+  fs.writeFileSync(path.join(dir, 'main.js'), codeOf(id));
 }
 async function run() {
-  Store.init(directory);
-  configureNetwork();
-  let entries = await Store.index();
-  assert.equal(entries.length, 1);
-  assert.equal(entries[0].installed(), false);
-  const prepared = await Store.download(entries[0]);
-  assert.equal(Store.load().length, 0, 'download must not activate unprobed code');
-  assert.throws(() => Store.commit({ ...prepared }), /官方商店/, 'forged packages must not install');
-  Store.commit(prepared);
-  assert.equal(Store.load()[0].manifest.version, '1.0.0');
-  assert.ok(seen.some(url => url.startsWith('https://api.github.com/')));
-  assert.ok(seen.some(url => url.startsWith('https://gh-proxy.com/')), 'hash-checked file mirror should work');
-  assert.ok(!seen.filter(url => url.includes('index.json')).some(url => url.startsWith('https://gh-proxy.com/')),
-    'third-party mirror must never supply executable index authority');
-  const savedPath = path.join(directory, 'qg_verified_modules/test.json');
-  const previous = fs.readFileSync(savedPath, 'utf8');
-  fixture = packageFor('1.0.1');
-  entries = await Store.index();
-  assert.equal(entries[0].hasUpdate(), true);
-  brokenAsset = true;
-  await assert.rejects(Store.download(entries[0]), /校验不符/);
-  assert.equal(fs.readFileSync(savedPath, 'utf8'), previous, 'failed download preserves old package');
-  brokenAsset = false;
-  const correctManifest = fixture.manifest;
-  const correctManifestHash = fixture.entry.sha256['manifest.json'];
-  fixture.manifest = fixture.manifest.replace('"id":"test"', '"id":"other"');
-  fixture.entry.sha256['manifest.json'] = digest(fixture.manifest);
-  entries = await Store.index();
-  await assert.rejects(Store.download(entries[0]), /索引不符/, 'hashes alone cannot authorize a different module identity');
-  fixture.manifest = correctManifest;
-  fixture.entry.sha256['manifest.json'] = correctManifestHash;
-  entries = await Store.index();
-  const upgrade = await Store.download(entries[0]);
-  failRename = true;
-  assert.throws(() => Store.commit(upgrade), /保存站源文件失败/);
-  assert.equal(fs.readFileSync(savedPath, 'utf8'), previous, 'failed persistence preserves old package');
-  assert.equal(Store.load()[0].manifest.version, '1.0.0');
-  failRename = false;
-  Store.commit(upgrade);
-  assert.equal(Store.load()[0].manifest.version, '1.0.1');
-  Store.saveState('test', 'session', 'opaque state');
-  assert.equal(Store.loadState('test', 'session'), 'opaque state');
-  assert.throws(() => Store.saveState('test', '../escape', 'bad'), /状态名/);
-  assert.throws(() => Store.saveState('../escape', 'session', 'bad'), /存储不可用/);
-  assert.throws(() => Store.saveState('test', 'session', 'a'.repeat(256 * 1024 + 1)), /状态过大/);
-  for (let index = 0; index < 31; index++) Store.saveState('test', 'part' + index, 'tiny');
-  assert.throws(() => Store.saveState('test', 'overflow', 'tiny'), /存储已达上限/);
-  Store.saveState('test', 'session', 'opaque state');
-  assert.equal(Entry.fromObject({ ...fixture.entry, api: 2 }), null);
-  assert.equal(Entry.fromObject({ ...fixture.entry, repo: 'attacker/test' }), null);
-  assert.equal(Entry.fromObject({ ...fixture.entry, tag: 'v9.0.0' }), null);
-  assert.throws(() => Manifest.parse(fixture.manifest.replace('"example.com"', '"127.0.0.1"')), /声明无效/);
-  assert.throws(() => Manifest.parse(fixture.manifest.replace('"api":1', '"api":2')), /不兼容/);
   assert.equal(Store.compareVersion('1.10.0', '1.9.9'), 1);
   assert.equal(Store.compareVersion('1.0.0', '1.0.0'), 0);
+  assert.equal(Store.compareVersion('1.0.9', '1.0.10'), -1);
+  assert.throws(() => Manifest.parse(manifestOf('test', '1.0.0').replace('"example.com"', '"127.0.0.1"')), /声明无效/);
+  assert.throws(() => Manifest.parse(manifestOf('test', '1.0.0').replace('"api":1', '"api":2')), /不兼容/);
+  assert.throws(() => Manifest.parse(manifestOf('test', '1.0.0').replace('"search"', '"flight"')), /声明无效/);
+  assert.equal(Store.installed().length, 0, 'init has not run yet');
+  bundle('hongguo', '1.0.6');
+  bundle('demo');
+  bundle('mismatch', '1.0.0');
+  fs.writeFileSync(path.join(rawRoot, 'modules', 'mismatch', 'manifest.json'), manifestOf('other', '1.0.0'));
+  bundle('upper');
+  fs.rmSync(path.join(rawRoot, 'modules', 'upper'), { recursive: true, force: true });
+  fs.mkdirSync(path.join(rawRoot, 'modules', 'UPPER'));
+  Store.init(context);
+  const versions = Object.fromEntries(Store.installed().map(pkg => [pkg.manifest.id, pkg.manifest.version]));
+  assert.equal(versions.hongguo, '1.0.6', 'bundled module installs into sandbox');
+  assert.equal(versions.demo, '1.0.0');
+  assert.equal(versions.mismatch, undefined, 'manifest id must match its directory name');
+  assert.equal(versions.UPPER, undefined, 'non-lowercase directory names are rejected');
+  assert.equal(Store.installed().length, 2);
+  assert.ok(fs.existsSync(path.join(directory, 'qg_verified_modules', 'hongguo.json')));
+  const saved = JSON.parse(fs.readFileSync(path.join(directory, 'qg_verified_modules', 'demo.json'), 'utf8'));
+  assert.equal(saved.entryHash, digest(codeOf('demo')), 'archive stores content hashes');
+  assert.equal(saved.code, codeOf('demo'));
+  Store.saveState('demo', 'session', 'opaque state');
+  assert.equal(Store.loadState('demo', 'session'), 'opaque state');
+  assert.throws(() => Store.saveState('demo', '../escape', 'bad'), /状态名/);
+  assert.throws(() => Store.saveState('../escape', 'session', 'bad'), /存储不可用/);
+  assert.throws(() => Store.saveState('demo', 'session', 'a'.repeat(256 * 1024 + 1)), /状态过大/);
+  for (let index = 0; index < 31; index++) Store.saveState('demo', 'part' + index, 'tiny');
+  assert.throws(() => Store.saveState('demo', 'overflow', 'tiny'), /存储已达上限/);
   delete require.cache[storePath];
-  Store = require(storePath).QgModuleStore;
-  Store.init(directory);
-  assert.equal(Store.load()[0].manifest.version, '1.0.1', 'verified installed package survives restart');
-  Store.remove('test');
-  assert.equal(Store.load().length, 0);
-  assert.equal(fs.existsSync(savedPath), false);
-  assert.equal(Store.loadState('test', 'session'), 'opaque state', 'uninstall preserves source user state');
-  console.log('PASS trusted index, manifest/hash checks, mirror fallback, two-phase install, atomic rollback, restart and namespaced state');
+  const RestartedStore = require(storePath).QgModuleStore;
+  fs.writeFileSync(path.join(rawRoot, 'modules', 'demo', 'main.js'), 'tampered but newer rawfile is not reinstalled');
+  const sandboxDemo = path.join(directory, 'qg_verified_modules', 'demo.json');
+  fs.writeFileSync(sandboxDemo, archiveOf('demo').replace('1.0.0', '9.9.9').replace('"api":1', '"api":1'));
+  const higher = JSON.parse(fs.readFileSync(sandboxDemo, 'utf8'));
+  const repaired = JSON.stringify({ ...higher, manifest: higher.manifest, manifestHash: digest(higher.manifest) });
+  fs.writeFileSync(sandboxDemo, repaired);
+  const offlineContext = { filesDir: directory, resourceManager: { getRawFileListSync: () => {
+    throw new Error('rawfile unavailable');
+  }, getRawFileContentSync: () => {
+    throw new Error('rawfile unavailable');
+  } } };
+  RestartedStore.init(offlineContext);
+  const afterRestart = Object.fromEntries(RestartedStore.installed().map(pkg => [pkg.manifest.id, pkg.manifest.version]));
+  assert.equal(afterRestart.demo, '9.9.9', 'newer sandbox version survives restart');
+  assert.equal(afterRestart.hongguo, '1.0.6', 'sandbox archive loads without rawfile');
+  fs.rmSync(path.join(directory, 'qg_verified_modules', 'hongguo.json'));
+  fs.writeFileSync(path.join(directory, 'qg_verified_modules', 'corrupt.json'), '{ broken json');
+  delete require.cache[storePath];
+  const ThirdStore = require(storePath).QgModuleStore;
+  ThirdStore.init(context);
+  const ids = ThirdStore.installed().map(pkg => pkg.manifest.id).sort();
+  assert.deepEqual(ids, ['demo', 'hongguo'], 'bundled root re-installs removed modules and skips corrupt archives');
+  assert.equal(ThirdStore.loadState('demo', 'session'), 'opaque state', 're-install preserves module user state');
+  console.log('PASS bundled install, id verification, sandbox persistence, higher-version retention, corrupt archive skip and namespaced state');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {
   Module._load = originalLoad;
